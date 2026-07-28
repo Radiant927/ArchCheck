@@ -1,0 +1,80 @@
+{
+    "project_name": "示例建筑 — 演示数据",
+    "rooms": [
+        {
+            "id": "R001",
+            "name": "房间A",
+            "type": "办公室",
+            "room_area_sqm": 85,
+            "exit_count": 1,
+            "door_width_m": 1.0,
+            "has_emergency_light": true,
+            "dist_to_water_m": 3.0,
+            "circuit_load_a": 12,
+            "outlet_spacing_m": 5.0
+        },
+        {
+            "id": "R002",
+            "name": "走廊",
+            "type": "走廊",
+            "room_area_sqm": 42,
+            "exit_count": 2,
+            "door_width_m": 1.2,
+            "corridor_length_m": 42,
+            "has_emergency_light": false,
+            "dist_to_water_m": 5.0,
+            "circuit_load_a": 8,
+            "outlet_spacing_m": 8.0
+        },
+        {
+            "id": "R003",
+            "name": "配电间",
+            "type": "设备间",
+            "room_area_sqm": 12,
+            "exit_count": 1,
+            "door_width_m": 0.9,
+            "has_emergency_light": true,
+            "dist_to_water_m": 0.8,
+            "circuit_load_a": 20,
+            "outlet_spacing_m": 3.0
+        },
+        {
+            "id": "R004",
+            "name": "会议室",
+            "type": "会议室",
+            "room_area_sqm": 120,
+            "exit_count": 2,
+            "door_width_m": 1.5,
+            "has_emergency_light": true,
+            "dist_to_water_m": 10.0,
+            "circuit_load_a": 10,
+            "outlet_spacing_m": 4.0
+        },
+        {
+            "id": "R005",
+            "name": "楼梯间",
+            "type": "楼梯间",
+            "room_area_sqm": 20,
+            "exit_count": 1,
+            "door_width_m": 1.1,
+            "has_emergency_light": false,
+            "dist_to_water_m": 8.0,
+            "circuit_load_a": 6,
+            "outlet_spacing_m": 0
+        }
+    ],
+    "fire_zones": [
+        {
+            "id": "FZ001",
+            "name": "防火分区1",
+            "fire_zone_area_sqm": 2800,
+            "rooms": ["R001", "R002", "R003"]
+        },
+        {
+            "id": "FZ002",
+            "name": "防火分区2",
+            "fire_zone_area_sqm": 140,
+            "rooms": ["R004", "R005"]
+        }
+    ]
+}

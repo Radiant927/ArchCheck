@@ -1,0 +1,52 @@
+[
+    {
+        "id": "CIVIL-001",
+        "name": "Evacuation Distance Check",
+        "description": "Corridor length must not exceed code limit",
+        "field": "corridor_length_m",
+        "operator": "<=",
+        "threshold": 30,
+        "unit": "m",
+        "severity": "High",
+        "code_ref": "GB 50016 5.5.17",
+        "message": "Corridor too long (actual {value}m > limit {threshold}m). Add refuge passage or redesign evacuation route."
+    },
+    {
+        "id": "CIVIL-002",
+        "name": "Fire Zone Area Check",
+        "description": "Single fire zone area must not exceed maximum",
+        "field": "fire_zone_area_sqm",
+        "operator": "<=",
+        "threshold": 2500,
+        "unit": "sqm",
+        "severity": "High",
+        "code_ref": "GB 50016 5.3.1",
+        "message": "Fire zone area exceeds limit (actual {value}sqm > limit {threshold}sqm). Add fire separation."
+    },
+    {
+        "id": "CIVIL-003",
+        "name": "Emergency Exit Count Check",
+        "description": "Rooms exceeding area threshold need sufficient exits",
+        "field": "exit_count",
+        "operator": ">=",
+        "threshold": 2,
+        "condition_field": "room_area_sqm",
+        "condition_operator": ">",
+        "condition_threshold": 50,
+        "severity": "Medium",
+        "code_ref": "GB 50016 5.5.8",
+        "message": "Room area {condition_value}sqm > {condition_threshold}sqm, only {value} exit(s), at least {threshold} required."
+    },
+    {
+        "id": "CIVIL-004",
+        "name": "Evacuation Door Width Check",
+        "description": "Door clear width must meet code minimum",
+        "field": "door_width_m",
+        "operator": ">=",
+        "threshold": 0.9,
+        "unit": "m",
+        "severity": "Low",
+        "code_ref": "GB 50016 5.5.18",
+        "message": "Door width insufficient (actual {value}m < required {threshold}m). Widen the door."
+    }
+]
