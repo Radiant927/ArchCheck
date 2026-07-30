@@ -1,0 +1,9 @@
+{
+  "id": "cn",
+  "name": "中国标准 (GB)",
+  "short_name": "CN · GB",
+  "flag": "🇨🇳",
+  "language": "zh",
+  "civil_codes": "GB 50016《建筑设计防火规范》",
+  "eee_codes": "GB 51309 / GB 50054 / GB 50055"
+}

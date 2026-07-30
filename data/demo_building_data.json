@@ -1,80 +1,134 @@
 {
-    "project_name": "示例建筑 — 演示数据",
-    "rooms": [
+    "project_name": "示例办公楼 — 三层（演示数据）",
+    "building_params": {
+        "total_floors": 3,
+        "occupancy_type": "office",
+        "ground_floor_exit_width_m": 2.4,
+        "fire_pool_volume_m3": 160,
+        "transformer_capacity_kw": 650,
+        "emergency_power_duration_min": 60,
+        "fire_elevator_count": 1
+    },
+    "floors": [
         {
-            "id": "R001",
-            "name": "房间A",
-            "type": "办公室",
-            "room_area_sqm": 85,
-            "exit_count": 1,
-            "door_width_m": 1.0,
-            "has_emergency_light": true,
-            "dist_to_water_m": 3.0,
-            "circuit_load_a": 12,
-            "outlet_spacing_m": 5.0
+            "floor_id": "F1",
+            "floor_name": "一层",
+            "rooms": [
+                {
+                    "id": "R101", "name": "办公室A", "type": "Office",
+                    "room_area_sqm": 85, "exit_count": 1, "door_width_m": 0.85,
+                    "has_emergency_light": true, "dist_to_water_m": 3.0,
+                    "circuit_load_a": 12, "outlet_spacing_m": 5.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R102", "name": "走廊", "type": "Corridor",
+                    "room_area_sqm": 42, "exit_count": 2, "door_width_m": 1.2,
+                    "has_emergency_light": false, "dist_to_water_m": 5.0,
+                    "circuit_load_a": 8, "outlet_spacing_m": 8.0, "corridor_length_m": 42
+                },
+                {
+                    "id": "R103", "name": "配电间", "type": "Equipment Room",
+                    "room_area_sqm": 12, "exit_count": 1, "door_width_m": 0.9,
+                    "has_emergency_light": true, "dist_to_water_m": 0.8,
+                    "circuit_load_a": 20, "outlet_spacing_m": 3.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R104", "name": "会议室", "type": "Meeting Room",
+                    "room_area_sqm": 120, "exit_count": 2, "door_width_m": 1.5,
+                    "has_emergency_light": true, "dist_to_water_m": 10.0,
+                    "circuit_load_a": 10, "outlet_spacing_m": 4.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R105", "name": "楼梯间", "type": "Stairwell",
+                    "room_area_sqm": 20, "exit_count": 1, "door_width_m": 1.1,
+                    "has_emergency_light": false, "dist_to_water_m": 8.0,
+                    "circuit_load_a": 6, "outlet_spacing_m": 0, "corridor_length_m": 0
+                }
+            ],
+            "fire_zones": [
+                {"id": "FZ101", "name": "防火分区1", "fire_zone_area_sqm": 2800, "rooms": ["R101", "R102", "R103"]},
+                {"id": "FZ102", "name": "防火分区2", "fire_zone_area_sqm": 140, "rooms": ["R104", "R105"]}
+            ]
         },
         {
-            "id": "R002",
-            "name": "走廊",
-            "type": "走廊",
-            "room_area_sqm": 42,
-            "exit_count": 2,
-            "door_width_m": 1.2,
-            "corridor_length_m": 42,
-            "has_emergency_light": false,
-            "dist_to_water_m": 5.0,
-            "circuit_load_a": 8,
-            "outlet_spacing_m": 8.0
+            "floor_id": "F2",
+            "floor_name": "二层",
+            "rooms": [
+                {
+                    "id": "R201", "name": "办公室B", "type": "Office",
+                    "room_area_sqm": 90, "exit_count": 2, "door_width_m": 1.0,
+                    "has_emergency_light": true, "dist_to_water_m": 4.0,
+                    "circuit_load_a": 13, "outlet_spacing_m": 4.5, "corridor_length_m": 0
+                },
+                {
+                    "id": "R202", "name": "走廊", "type": "Corridor",
+                    "room_area_sqm": 45, "exit_count": 2, "door_width_m": 1.2,
+                    "has_emergency_light": false, "dist_to_water_m": 6.0,
+                    "circuit_load_a": 9, "outlet_spacing_m": 5.0, "corridor_length_m": 35
+                },
+                {
+                    "id": "R203", "name": "设备间", "type": "Equipment Room",
+                    "room_area_sqm": 15, "exit_count": 1, "door_width_m": 0.9,
+                    "has_emergency_light": true, "dist_to_water_m": 2.5,
+                    "circuit_load_a": 18, "outlet_spacing_m": 3.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R204", "name": "培训室", "type": "Meeting Room",
+                    "room_area_sqm": 110, "exit_count": 1, "door_width_m": 0.85,
+                    "has_emergency_light": true, "dist_to_water_m": 9.0,
+                    "circuit_load_a": 11, "outlet_spacing_m": 4.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R205", "name": "楼梯间", "type": "Stairwell",
+                    "room_area_sqm": 20, "exit_count": 1, "door_width_m": 1.1,
+                    "has_emergency_light": true, "dist_to_water_m": 7.0,
+                    "circuit_load_a": 6, "outlet_spacing_m": 0, "corridor_length_m": 0
+                }
+            ],
+            "fire_zones": [
+                {"id": "FZ201", "name": "防火分区1", "fire_zone_area_sqm": 2100, "rooms": ["R201", "R202", "R203"]},
+                {"id": "FZ202", "name": "防火分区2", "fire_zone_area_sqm": 130, "rooms": ["R204", "R205"]}
+            ]
         },
         {
-            "id": "R003",
-            "name": "配电间",
-            "type": "设备间",
-            "room_area_sqm": 12,
-            "exit_count": 1,
-            "door_width_m": 0.9,
-            "has_emergency_light": true,
-            "dist_to_water_m": 0.8,
-            "circuit_load_a": 20,
-            "outlet_spacing_m": 3.0
-        },
-        {
-            "id": "R004",
-            "name": "会议室",
-            "type": "会议室",
-            "room_area_sqm": 120,
-            "exit_count": 2,
-            "door_width_m": 1.5,
-            "has_emergency_light": true,
-            "dist_to_water_m": 10.0,
-            "circuit_load_a": 10,
-            "outlet_spacing_m": 4.0
-        },
-        {
-            "id": "R005",
-            "name": "楼梯间",
-            "type": "楼梯间",
-            "room_area_sqm": 20,
-            "exit_count": 1,
-            "door_width_m": 1.1,
-            "has_emergency_light": false,
-            "dist_to_water_m": 8.0,
-            "circuit_load_a": 6,
-            "outlet_spacing_m": 0
-        }
-    ],
-    "fire_zones": [
-        {
-            "id": "FZ001",
-            "name": "防火分区1",
-            "fire_zone_area_sqm": 2800,
-            "rooms": ["R001", "R002", "R003"]
-        },
-        {
-            "id": "FZ002",
-            "name": "防火分区2",
-            "fire_zone_area_sqm": 140,
-            "rooms": ["R004", "R005"]
+            "floor_id": "F3",
+            "floor_name": "三层",
+            "rooms": [
+                {
+                    "id": "R301", "name": "办公室C", "type": "Office",
+                    "room_area_sqm": 88, "exit_count": 2, "door_width_m": 1.0,
+                    "has_emergency_light": true, "dist_to_water_m": 3.5,
+                    "circuit_load_a": 12, "outlet_spacing_m": 5.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R302", "name": "走廊", "type": "Corridor",
+                    "room_area_sqm": 43, "exit_count": 2, "door_width_m": 1.2,
+                    "has_emergency_light": true, "dist_to_water_m": 5.5,
+                    "circuit_load_a": 8, "outlet_spacing_m": 7.0, "corridor_length_m": 28
+                },
+                {
+                    "id": "R303", "name": "弱电间", "type": "Equipment Room",
+                    "room_area_sqm": 10, "exit_count": 1, "door_width_m": 0.9,
+                    "has_emergency_light": true, "dist_to_water_m": 3.0,
+                    "circuit_load_a": 10, "outlet_spacing_m": 2.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R304", "name": "多功能厅", "type": "Meeting Room",
+                    "room_area_sqm": 130, "exit_count": 1, "door_width_m": 1.6,
+                    "has_emergency_light": true, "dist_to_water_m": 11.0,
+                    "circuit_load_a": 12, "outlet_spacing_m": 4.0, "corridor_length_m": 0
+                },
+                {
+                    "id": "R305", "name": "楼梯间", "type": "Stairwell",
+                    "room_area_sqm": 20, "exit_count": 1, "door_width_m": 1.1,
+                    "has_emergency_light": true, "dist_to_water_m": 8.5,
+                    "circuit_load_a": 6, "outlet_spacing_m": 0, "corridor_length_m": 0
+                }
+            ],
+            "fire_zones": [
+                {"id": "FZ301", "name": "防火分区1", "fire_zone_area_sqm": 2050, "rooms": ["R301", "R302", "R303"]},
+                {"id": "FZ302", "name": "防火分区2", "fire_zone_area_sqm": 150, "rooms": ["R304", "R305"]}
+            ]
         }
     ]
 }

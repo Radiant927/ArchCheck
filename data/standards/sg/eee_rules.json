@@ -1,0 +1,52 @@
+[
+    {
+        "id": "EEE-001",
+        "name": "Emergency Lighting Check",
+        "description": "Corridors, stairwells, and vestibules must have emergency lighting",
+        "field": "has_emergency_light",
+        "operator": "==",
+        "threshold": true,
+        "condition_field": "type",
+        "condition_operator": "in",
+        "condition_threshold": ["Corridor", "Stairwell", "Vestibule"],
+        "severity": "High",
+        "code_ref": "SS 551 Cl.5.2",
+        "message": "{room_name} (type: {condition_value}) lacks emergency lighting. Install self-contained luminaire."
+    },
+    {
+        "id": "EEE-002",
+        "name": "Panel Water Clearance Check",
+        "description": "Electrical panel must maintain safe distance from water sources",
+        "field": "dist_to_water_m",
+        "operator": ">=",
+        "threshold": 1.5,
+        "unit": "m",
+        "severity": "Medium",
+        "code_ref": "CP 5 Cl.4.2.3",
+        "message": "Panel is only {value}m from water source, {threshold}m minimum required. Relocate panel or provide IP-rated enclosure."
+    },
+    {
+        "id": "EEE-003",
+        "name": "Circuit Load Check",
+        "description": "Final circuit load must not exceed rated capacity (ring circuit up to 32A permitted)",
+        "field": "circuit_load_a",
+        "operator": "<=",
+        "threshold": 32,
+        "unit": "A",
+        "severity": "Medium",
+        "code_ref": "CP 5 Cl.4.3.2",
+        "message": "Circuit load {value}A exceeds limit {threshold}A (ring circuit rating). Split circuit or use radial circuit."
+    },
+    {
+        "id": "EEE-004",
+        "name": "Socket Outlet Coverage Check",
+        "description": "Socket outlets provided for intended use; no hard spacing limit in CP 5",
+        "field": "outlet_spacing_m",
+        "operator": "<=",
+        "threshold": 10,
+        "unit": "m",
+        "severity": "Low",
+        "code_ref": "SS 531 Cl.6.2 (advisory)",
+        "message": "Outlet spacing {value}m exceeds advisory guideline {threshold}m. Additional outlets recommended based on point-of-use assessment."
+    }
+]

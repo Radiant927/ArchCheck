@@ -1,32 +1,32 @@
 [
     {
         "id": "CIVIL-001",
-        "name": "Evacuation Distance Check",
-        "description": "Corridor length must not exceed code limit",
+        "name": "疏散距离检查",
+        "description": "走廊疏散距离不应超过规范限值",
         "field": "corridor_length_m",
         "operator": "<=",
         "threshold": 30,
         "unit": "m",
         "severity": "High",
         "code_ref": "GB 50016 5.5.17",
-        "message": "Corridor too long (actual {value}m > limit {threshold}m). Add refuge passage or redesign evacuation route."
+        "message": "走廊长度 {value}m 超过限值 {threshold}m，需增设避难走道或重新设计疏散路线。"
     },
     {
         "id": "CIVIL-002",
-        "name": "Fire Zone Area Check",
-        "description": "Single fire zone area must not exceed maximum",
+        "name": "防火分区面积检查",
+        "description": "单个防火分区面积不应超过最大允许值",
         "field": "fire_zone_area_sqm",
         "operator": "<=",
         "threshold": 2500,
         "unit": "sqm",
         "severity": "High",
         "code_ref": "GB 50016 5.3.1",
-        "message": "Fire zone area exceeds limit (actual {value}sqm > limit {threshold}sqm). Add fire separation."
+        "message": "防火分区面积 {value}m² 超过限值 {threshold}m²，需增设防火分隔。"
     },
     {
         "id": "CIVIL-003",
-        "name": "Emergency Exit Count Check",
-        "description": "Rooms exceeding area threshold need sufficient exits",
+        "name": "安全出口数量检查",
+        "description": "面积超过阈值的房间需设置足够数量的安全出口",
         "field": "exit_count",
         "operator": ">=",
         "threshold": 2,
@@ -35,18 +35,18 @@
         "condition_threshold": 50,
         "severity": "Medium",
         "code_ref": "GB 50016 5.5.8",
-        "message": "Room area {condition_value}sqm > {condition_threshold}sqm, only {value} exit(s), at least {threshold} required."
+        "message": "房间面积 {condition_value}m² 超过 {condition_threshold}m²，仅设 {value} 个出口，至少需要 {threshold} 个。"
     },
     {
         "id": "CIVIL-004",
-        "name": "Evacuation Door Width Check",
-        "description": "Door clear width must meet code minimum",
+        "name": "疏散门净宽检查",
+        "description": "疏散门净宽应满足规范最小值",
         "field": "door_width_m",
         "operator": ">=",
         "threshold": 0.9,
         "unit": "m",
         "severity": "Low",
         "code_ref": "GB 50016 5.5.18",
-        "message": "Door width insufficient (actual {value}m < required {threshold}m). Widen the door."
+        "message": "门净宽 {value}m 小于要求的 {threshold}m，需加宽疏散门。"
     }
 ]

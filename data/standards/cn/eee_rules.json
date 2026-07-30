@@ -1,0 +1,52 @@
+[
+    {
+        "id": "EEE-001",
+        "name": "应急照明检查",
+        "description": "走廊、楼梯间、前室等区域必须设置应急照明",
+        "field": "has_emergency_light",
+        "operator": "==",
+        "threshold": true,
+        "condition_field": "type",
+        "condition_operator": "in",
+        "condition_threshold": ["Corridor", "Stairwell", "Vestibule"],
+        "severity": "High",
+        "code_ref": "GB 51309 3.2.1",
+        "message": "{room_name}（类型：{condition_value}）缺少应急照明，需安装应急照明灯具。"
+    },
+    {
+        "id": "EEE-002",
+        "name": "配电箱水源间距检查",
+        "description": "配电箱与水源之间应保持安全距离",
+        "field": "dist_to_water_m",
+        "operator": ">=",
+        "threshold": 1.5,
+        "unit": "m",
+        "severity": "Medium",
+        "code_ref": "GB 50054 4.2.3",
+        "message": "配电箱距水源仅 {value}m，要求至少 {threshold}m，需移位配电箱。"
+    },
+    {
+        "id": "EEE-003",
+        "name": "回路负荷检查",
+        "description": "单回路负荷不应超过额定容量",
+        "field": "circuit_load_a",
+        "operator": "<=",
+        "threshold": 16,
+        "unit": "A",
+        "severity": "Medium",
+        "code_ref": "GB 50054 3.4",
+        "message": "回路过载（实际 {value}A > 限值 {threshold}A），需拆分回路或降低负荷。"
+    },
+    {
+        "id": "EEE-004",
+        "name": "插座间距检查",
+        "description": "插座间距不应超过规范限值",
+        "field": "outlet_spacing_m",
+        "operator": "<=",
+        "threshold": 6,
+        "unit": "m",
+        "severity": "Low",
+        "code_ref": "GB 50055 6.0.3",
+        "message": "插座间距过大（实际 {value}m > 限值 {threshold}m），需增设插座。"
+    }
+]

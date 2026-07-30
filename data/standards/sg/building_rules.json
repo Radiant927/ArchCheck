@@ -1,0 +1,50 @@
+[
+    {
+        "id": "BLD-001",
+        "name": "Ground Floor Exit Width Check",
+        "description": "Aggregate exit width at ground floor must satisfy maximum-floor occupant load",
+        "field": "ground_floor_exit_width_m",
+        "operator": ">=",
+        "threshold": 3.0,
+        "unit": "m",
+        "severity": "High",
+        "code_ref": "FC23 Cl.2.3.4",
+        "message": "Ground floor exit width {value}m below required {threshold}m based on maximum floor occupant load. Widen exit discharge."
+    },
+    {
+        "id": "BLD-002",
+        "name": "Fire Water Tank Capacity Check",
+        "description": "Fire water storage must meet total demand over required duration",
+        "field": "fire_pool_volume_m3",
+        "operator": ">=",
+        "threshold": 180,
+        "unit": "m³",
+        "severity": "High",
+        "code_ref": "FC23 Cl.6.3 / SS 575",
+        "message": "Fire water tank capacity {value}m³ below required {threshold}m³. Increase storage per hydrant and sprinkler demand."
+    },
+    {
+        "id": "BLD-003",
+        "name": "Transformer Capacity Check",
+        "description": "Installed transformer capacity must meet total building demand",
+        "field": "transformer_capacity_kw",
+        "operator": ">=",
+        "threshold": 750,
+        "unit": "kW",
+        "severity": "Medium",
+        "code_ref": "CP 5 Cl.3.3",
+        "message": "Transformer capacity {value}kW below total building demand {threshold}kW. Upgrade or add transformer unit."
+    },
+    {
+        "id": "BLD-004",
+        "name": "Emergency Power Duration Check",
+        "description": "Emergency power supply duration must meet Fire Code requirement",
+        "field": "emergency_power_duration_min",
+        "operator": ">=",
+        "threshold": 60,
+        "unit": "min",
+        "severity": "High",
+        "code_ref": "SS 551 Cl.5.3 / FC23 Cl.6.4",
+        "message": "Emergency power duration {value}min below required {threshold}min. Increase battery capacity or connect to standby generator."
+    }
+]

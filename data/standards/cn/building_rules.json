@@ -1,0 +1,50 @@
+[
+    {
+        "id": "BLD-001",
+        "name": "首层疏散外门总净宽检查",
+        "description": "首层疏散外门总净宽应按最多一层人数计算满足最小要求",
+        "field": "ground_floor_exit_width_m",
+        "operator": ">=",
+        "threshold": 3.0,
+        "unit": "m",
+        "severity": "High",
+        "code_ref": "GB 50016 5.5.19",
+        "message": "首层疏散外门总净宽 {value}m 小于要求 {threshold}m，按全楼最大层人数核算净宽不足，需加宽首层外门。"
+    },
+    {
+        "id": "BLD-002",
+        "name": "消防水池有效容积检查",
+        "description": "消防水池有效容积应满足火灾延续时间内全部消防用水量",
+        "field": "fire_pool_volume_m3",
+        "operator": ">=",
+        "threshold": 216,
+        "unit": "m³",
+        "severity": "High",
+        "code_ref": "GB 50974 4.3.2",
+        "message": "消防水池容积 {value}m³ 小于要求 {threshold}m³（按消火栓 3h + 喷淋 1h 合计），需扩大水池容量。"
+    },
+    {
+        "id": "BLD-003",
+        "name": "变压器装机容量检查",
+        "description": "变压器总装机容量应满足全楼计算负荷",
+        "field": "transformer_capacity_kw",
+        "operator": ">=",
+        "threshold": 750,
+        "unit": "kW",
+        "severity": "Medium",
+        "code_ref": "GB 50054 3.3",
+        "message": "变压器装机容量 {value}kW 小于全楼计算负荷 {threshold}kW，需增容或增设变压器。"
+    },
+    {
+        "id": "BLD-004",
+        "name": "应急照明备用电源持续时间检查",
+        "description": "应急照明备用电源持续供电时间不应小于规范要求",
+        "field": "emergency_power_duration_min",
+        "operator": ">=",
+        "threshold": 90,
+        "unit": "min",
+        "severity": "High",
+        "code_ref": "GB 51309 3.2.4",
+        "message": "应急照明备用电源持续时间 {value}min 小于要求 {threshold}min，需增大蓄电池容量。"
+    }
+]

@@ -1,0 +1,52 @@
+[
+    {
+        "id": "CIVIL-001",
+        "name": "Travel Distance Check",
+        "description": "Travel distance to exit must not exceed Fire Code limit",
+        "field": "corridor_length_m",
+        "operator": "<=",
+        "threshold": 30,
+        "unit": "m",
+        "severity": "High",
+        "code_ref": "FC23 Cl.2.3.2",
+        "message": "Travel distance {value}m exceeds limit {threshold}m (dead-end corridor ≤ 15m, one-direction ≤ 30m). Add refuge area or redesign escape route."
+    },
+    {
+        "id": "CIVIL-002",
+        "name": "Fire Compartment Area Check",
+        "description": "Single fire compartment area must not exceed maximum (sprinkler-protected building)",
+        "field": "fire_zone_area_sqm",
+        "operator": "<=",
+        "threshold": 5000,
+        "unit": "sqm",
+        "severity": "High",
+        "code_ref": "FC23 Cl.2.2.1",
+        "message": "Fire compartment area {value}m² exceeds limit {threshold}m² for sprinkler-protected buildings. Add fire separation walls."
+    },
+    {
+        "id": "CIVIL-003",
+        "name": "Exit Number Check",
+        "description": "Rooms exceeding area threshold require minimum number of exits",
+        "field": "exit_count",
+        "operator": ">=",
+        "threshold": 2,
+        "condition_field": "room_area_sqm",
+        "condition_operator": ">",
+        "condition_threshold": 50,
+        "severity": "Medium",
+        "code_ref": "FC23 Cl.2.3.1",
+        "message": "Room area {condition_value}m² exceeds {condition_threshold}m², only {value} exit(s) provided, minimum {threshold} required."
+    },
+    {
+        "id": "CIVIL-004",
+        "name": "Exit Door Width Check",
+        "description": "Exit door clear width must meet minimum requirement",
+        "field": "door_width_m",
+        "operator": ">=",
+        "threshold": 0.9,
+        "unit": "m",
+        "severity": "Low",
+        "code_ref": "FC23 Cl.2.3.4",
+        "message": "Door clear width {value}m below required {threshold}m. Widen exit door."
+    }
+]
