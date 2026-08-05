@@ -35,6 +35,7 @@ Desktop.ini
 output/*.png
 output/*.pdf
 output/*.html
+output/*.ifc
 
 # Jupyter
 .ipynb_checkpoints/
