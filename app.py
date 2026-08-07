@@ -495,14 +495,19 @@ elif st.session_state.page == "upload":
             tmp = OUTPUT / "uploaded_building.ifc"
             tmp.write_bytes(ifc_file.getvalue())
             try:
-                struct = parse_ifc(tmp)
+                struct = parse_ifc(tmp, max_floors=3, max_rooms_per_floor=6)
             except Exception as ex:
                 st.error(f'{T["ifc_parse_fail"]}: {ex}')
             else:
-                demo_floors = DEMO_DATA.get("floors", [])
-                room_map = {f["name"]: demo_floors[i]["rooms"]
-                            for i, f in enumerate(struct["floors"]) if i < len(demo_floors)}
-                bdata = build_review_data(struct, rooms_template=None, floor_room_map=room_map)
+                if struct["total_rooms"] > 0:
+                    # real rooms parsed from the IFC
+                    bdata = build_review_data(struct)
+                else:
+                    # no spaces in the model — fall back to demo rooms per storey
+                    demo_floors = DEMO_DATA.get("floors", [])
+                    room_map = {f["name"]: demo_floors[i]["rooms"]
+                                for i, f in enumerate(struct["floors"]) if i < len(demo_floors)}
+                    bdata = build_review_data(struct, rooms_template=None, floor_room_map=room_map)
                 st.session_state.building_data = bdata
                 st.session_state.uploaded_image = generate_sample_image(struct.get("file_name", "BIM"), variant=0)
                 st.session_state.civil_results = []
@@ -514,17 +519,17 @@ elif st.session_state.page == "upload":
                 st.success(
                     f'{T["ifc_parsed"]} {struct["storey_count"]} {T["ifc_storey_lbl"]} · '
                     f'{T["ifc_footprint_lbl"]} {struct["building_footprint_area_sqm"]} m² · '
-                    f'门 {total_doors} 扇')
+                    f'房间 {struct["total_rooms"]} · 门 {total_doors} 扇')
                 for f in struct["floors"]:
                     s = f["structure"]
                     if LANG == "zh":
                         line = (f'<b>{f["name"]}</b> — 占地 {f["footprint_area_sqm"]}m² · '
-                                f'墙 {s["walls"]} · 门 {s["doors"]} · 窗 {s["windows"]} · '
-                                f'门宽 {s["door_widths_m"]}m')
+                                f'房间 {len(f["rooms"])} · 墙 {s["walls"]} · 门 {s["doors"]} · '
+                                f'窗 {s["windows"]} · 门宽 {s["door_widths_m"]}m')
                     else:
                         line = (f'<b>{f["name"]}</b> — footprint {f["footprint_area_sqm"]}m² · '
-                                f'walls {s["walls"]} · doors {s["doors"]} · windows {s["windows"]} · '
-                                f'door widths {s["door_widths_m"]}m')
+                                f'rooms {len(f["rooms"])} · walls {s["walls"]} · doors {s["doors"]} · '
+                                f'windows {s["windows"]} · door widths {s["door_widths_m"]}m')
                     st.markdown(f'<div style="font-size:13px;color:{C["muted"]};padding:2px 0;">{line}</div>',
                                 unsafe_allow_html=True)
 
