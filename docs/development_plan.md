@@ -94,11 +94,11 @@ Civil · EEE · Building · Coordinator
 ## 六、当前进度（如实）
 
 - ✅ 代码模块化（`core/`）+ docs 整理 —— 已提交并推送 GitHub（`786f725`）
-- ✅ ifcopenshell、openai SDK 已安装
+- ✅ ifcopenshell、openai、anthropic SDK 已安装
 - ✅ **阶段 1+2：IFC 解析跑通** —— 用你的真实文件 `bim/建筑四层.ifc` 验证：2 层结构（占地 5484m² / 77 扇门 0.6+0.75m / 墙 180 / 窗 81）全部解析成功
 - ✅ **阶段 3：App 集成** —— 上传页新增"上传 IFC"入口，上传后自动解析出结构摘要，房间参数由编辑器补录，审查/结果/导出全复用
 - ✅ **IFC→引擎 往返** —— 真实 IFC 解析 + 补录 → 审查出结果（CN 17 / SG 13，含 2 冲突）
-- 🔨 **阶段 4：DeepSeek 接入** —— 待做，需 `DEEPSEEK_API_KEY`
+- ✅ **阶段 4：DeepSeek 接入完成** —— 走本地代理（Anthropic 协议，deepseek-v4-flash），实现审查叙述 / 冲突协调 / 规则生成；结果页加"AI 审查报告"面板，端到端实测通过（无需单独 API key）
 - 🔨 `scripts/generate_demo_ifc.py` —— 已写（生成带房间的干净 IFC），非主线，可后补
 
 > 注：真实 IFC 文件经检查**没有 IfcSpace（房间）/ IfcZone（防火分区）**，因此按你选定的方案采用「结构解析 + 参数编辑器补录」。

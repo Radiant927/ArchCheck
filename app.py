@@ -18,6 +18,7 @@ from core.report import generate_report
 from core.i18n import _room_type_label, _floor_label
 from core.engine import DEMO_DATA, run_full_review
 from bim.parser import parse_ifc, build_review_data
+import llm.client as llm
 
 # ============================================================
 # PAGE CONFIG — must be first Streamlit call
@@ -387,6 +388,9 @@ if st.session_state.review_loading:
     st.session_state.building_results = results["building_results"]
     st.session_state.conflicts = results["conflicts"]
     st.session_state.all_issues = results["all_issues"]
+    st.session_state.ai_report = None
+    st.session_state.ai_coord = None
+    st.session_state.ai_error = None
     st.session_state.review_loading = False
     goto("results")
     st.rerun()
@@ -764,6 +768,37 @@ elif st.session_state.page == "results":
                     )
             if not added_in_other and not removed_in_other:
                 st.success(T["diff_identical"].format(cur=cur_name, oth=oth_name))
+
+    # ---- AI review report (LLM-generated) ----
+    ai_exp = st.expander(f"🤖 {T['ai_report_t']}")
+    with ai_exp:
+        if not llm.available():
+            st.info(T["ai_unavailable"])
+        else:
+            if st.button(T["ai_generate_btn"], key="ai_gen"):
+                with st.spinner("DeepSeek..."):
+                    try:
+                        st.session_state.ai_report = llm.generate_review_narrative(
+                            civil_r, eee_r, building_r, conflicts, STD_META, LANG)
+                        st.session_state.ai_coord = llm.coordinate_conflicts(
+                            conflicts, STD_META, LANG)
+                        st.session_state.ai_error = None
+                    except Exception as ex:
+                        st.session_state.ai_report = None
+                        st.session_state.ai_coord = None
+                        st.session_state.ai_error = str(ex)
+            if st.session_state.get("ai_report"):
+                st.markdown(st.session_state["ai_report"])
+                if st.session_state.get("ai_coord"):
+                    st.markdown("---")
+                    st.markdown(
+                        f'<div style="font-size:15px;font-weight:700;color:{C["purple"]};margin-bottom:6px;">'
+                        f'{T["ai_coord_t"]}</div>', unsafe_allow_html=True)
+                    st.markdown(st.session_state["ai_coord"])
+            elif st.session_state.get("ai_error"):
+                st.warning(f'{T["ai_fail_t"]}: {st.session_state["ai_error"]}')
+            else:
+                st.caption(T["ai_report_hint"])
 
     st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
 
