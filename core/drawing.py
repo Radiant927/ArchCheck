@@ -191,21 +191,183 @@ def _fix_map():
         "BLD-003": T["fix_bld003"], "BLD-004": T["fix_bld004"],
     }
 
-def generate_correction_image(image, civ, eee, conflicts, bdata=None, floor_name="", variant=0):
+
+# ============================================================
+# DATA-DRIVEN ROOM PLAN (replaces the generic template for real input)
+# ============================================================
+def _treemap(areas):
+    """Squarified treemap. areas: list of floats. Returns rects (x,y,w,h) in [0,1]²."""
+    total = sum(areas) or 1.0
+    norm = [max(a, 1e-6) / total for a in areas]
+    rects = []
+
+    def worst(row, length):
+        s = sum(row)
+        if s <= 0:
+            return float("inf")
+        mx, mn = max(row), min(row)
+        return max(length * length * mx / (s * s), s * s / (length * length * mn))
+
+    def layout(row, rx, ry, rw, rh):
+        s = sum(row)
+        if rw >= rh:
+            for a in row:
+                hh = rh * a / s
+                rects.append((rx, ry, rw, hh))
+                ry += hh
+        else:
+            for a in row:
+                ww = rw * a / s
+                rects.append((rx, ry, ww, rh))
+                rx += ww
+
+    row = []
+    rx, ry, rw, rh = 0.0, 0.0, 1.0, 1.0
+    i = 0
+    n = len(norm)
+    while i < n:
+        a = norm[i]
+        if not row:
+            row.append(a)
+            i += 1
+            continue
+        if worst(row + [a], min(rw, rh)) <= worst(row, min(rw, rh)):
+            row.append(a)
+            i += 1
+            continue
+        s = sum(row)
+        if rw >= rh:
+            hh = s / rw          # strip area == row area fraction
+            layout(row, rx, ry, rw, hh)
+            ry += hh
+            rh -= hh
+        else:
+            ww = s / rh
+            layout(row, rx, ry, ww, rh)
+            rx += ww
+            rw -= ww
+        row = []
+    if row:
+        # last row fills the entire remaining region
+        if rw >= rh:
+            layout(row, rx, ry, rw, rh)
+        else:
+            layout(row, rx, ry, rw, rh)
+    return rects
+
+
+ROOM_TYPE_FILL = {
+    "Office": (233, 240, 248), "Corridor": (224, 236, 247),
+    "Stairwell": (255, 246, 230), "Meeting Room": (238, 240, 252),
+    "Equipment Room": (252, 234, 234), "Vestibule": (240, 244, 238),
+}
+
+
+def render_room_plan(rooms, floor_name=""):
+    """Draw a data-driven floor plan: rooms packed by area (treemap), labeled.
+
+    Returns (PIL image, room_map) where room_map maps room name -> (cx, cy).
+    """
     W, H = 1800, 1200
     img = Image.new("RGB", (W, H), (250, 251, 252))
     draw = ImageDraw.Draw(img)
+    ft, fm, fs = _load_fonts((36, 28, 22))
+    plan_label = "楼层平面图" if LANG == "zh" else "FLOOR PLAN"
+    title = f"{plan_label}  —  {_floor_label(floor_name)}" if floor_name else plan_label
+    draw.rectangle([0, 0, W, 70], fill=(30, 35, 45))
+    draw.text((40, 12), title, fill=(240, 245, 250), font=ft)
+
+    dx1, dy1, dx2, dy2 = 60, 110, 1130, H - 150
+    aw, ah = dx2 - dx1, dy2 - dy1
+    room_map = {}
+    if not rooms:
+        draw.text((dx1, dy1 + 40), "无房间数据" if LANG == "zh" else "No room data",
+                  fill=(150, 155, 165), font=fm)
+        return img, room_map
+
+    areas = [max(float(r.get("room_area_sqm", 20)), 4.0) for r in rooms]
+    rects = _treemap(areas)
+    for r, (nx, ny, nw, nh) in zip(rooms, rects):
+        x1 = int(dx1 + nx * aw)
+        y1 = int(dy1 + ny * ah)
+        x2 = int(dx1 + (nx + nw) * aw)
+        y2 = int(dy1 + (ny + nh) * ah)
+        fill = ROOM_TYPE_FILL.get(r.get("type", "Office"), ROOM_TYPE_FILL["Office"])
+        draw.rectangle([x1, y1, x2, y2], fill=fill, outline=(120, 130, 142), width=2)
+        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+        name = str(r.get("name", "?"))
+        area_txt = f'{float(r.get("room_area_sqm", 0)):.0f}m²'
+        if (x2 - x1) > 120 and (y2 - y1) > 46:
+            nb = draw.textbbox((0, 0), name, font=fm)
+            draw.text((cx - (nb[2] - nb[0]) // 2, cy - 18), name, fill=(30, 35, 45), font=fm)
+            ab = draw.textbbox((0, 0), area_txt, font=fs)
+            draw.text((cx - (ab[2] - ab[0]) // 2, cy + 14), area_txt, fill=(90, 100, 112), font=fs)
+        else:
+            nb = draw.textbbox((0, 0), name, font=fs)
+            draw.text((cx - (nb[2] - nb[0]) // 2, cy - 8), name, fill=(30, 35, 45), font=fs)
+        room_map[name] = (cx, cy)
+
+    # legend
+    ly = H - 60
+    lx = dx1
+    for rtype, col in ROOM_TYPE_FILL.items():
+        draw.rectangle([lx, ly, lx + 16, ly + 16], fill=col, outline=(140, 150, 160))
+        lbl = rtype
+        draw.text((lx + 22, ly), lbl, fill=(70, 75, 85), font=fs)
+        lx += 170
+    return img, room_map
+
+
+def annotate_room_plan(img, issues, room_map):
+    """Overlay numbered markers at each issue's room centroid (fallback: fixed)."""
+    img = img.copy().convert("RGBA")
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    font = _load_fonts((30,))[0]
+    for i, issue in enumerate(issues):
+        color = MARKER_COLORS.get(issue.get("type", "civil"), MARKER_COLORS["civil"])
+        pos = room_map.get(issue.get("location", ""))
+        if pos is None and i < len(VIOLATION_POSITIONS):
+            pos = VIOLATION_POSITIONS[i]
+        if pos is None:
+            continue
+        x, y = pos
+        r = 30
+        rgba = color + (255,)
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=rgba, outline=(255, 255, 255, 255), width=3)
+        label = str(i + 1)
+        bbox = draw.textbbox((0, 0), label, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        draw.text((x - tw // 2, y - th // 2 - 1), label, fill=(255, 255, 255, 255), font=font)
+    img = Image.alpha_composite(img, overlay)
+    return img.convert("RGB")
+
+
+def generate_correction_image(image, civ, eee, conflicts, bdata=None, floor_name="",
+                              variant=0, base_plan=None, room_map=None):
+    W, H = 1800, 1200
+    if base_plan is not None:
+        img = base_plan.convert("RGB").copy()
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([0, 0, W, 6], fill=(100, 160, 50))
+    else:
+        img = Image.new("RGB", (W, H), (250, 251, 252))
+        draw = ImageDraw.Draw(img)
+        ft, fm, fs = _load_fonts((34, 24, 20))
+        correction_title = "修正方案" if LANG == "zh" else "CORRECTION PLAN"
+        title = f"{correction_title}  —  {floor_name}" if floor_name else f"{correction_title}"
+        draw.rectangle([0, 0, W, 70], fill=(100, 160, 50))
+        draw.text((40, 12), title, fill=(255, 255, 255), font=ft)
+        _draw_floor_plan(draw, W, H, variant=variant)
     ft, fm, fs = _load_fonts((34, 24, 20))
-    correction_title = "修正方案" if LANG == "zh" else "CORRECTION PLAN"
-    title = f"{correction_title}  —  {floor_name}" if floor_name else f"{correction_title}"
-    draw.rectangle([0, 0, W, 70], fill=(100, 160, 50))
-    draw.text((40, 12), title, fill=(255, 255, 255), font=ft)
-    _draw_floor_plan(draw, W, H, variant=variant)
     all_items = list(civ) + list(eee)
     for i, iss in enumerate(all_items):
-        if i >= len(VIOLATION_POSITIONS):
-            break
-        x, y = VIOLATION_POSITIONS[i]
+        pos = room_map.get(iss.get("location", "")) if room_map else None
+        if pos is None:
+            if i >= len(VIOLATION_POSITIONS):
+                break
+            pos = VIOLATION_POSITIONS[i]
+        x, y = pos
         r = 18
         draw.ellipse([x-r, y-r, x+r, y+r], fill=(100,160,50), outline=(255,255,255), width=2)
         label = str(i+1)

@@ -13,6 +13,7 @@ import core.i18n as i18n
 from core.config import C, OUTPUT
 from core.drawing import (generate_sample_image, annotate_image,
                           generate_correction_image, generate_building_section,
+                          render_room_plan, annotate_room_plan,
                           _fix_map)
 from core.report import generate_report
 from core.i18n import _room_type_label, _floor_label
@@ -509,7 +510,12 @@ elif st.session_state.page == "upload":
                                 for i, f in enumerate(struct["floors"]) if i < len(demo_floors)}
                     bdata = build_review_data(struct, rooms_template=None, floor_room_map=room_map)
                 st.session_state.building_data = bdata
-                st.session_state.uploaded_image = generate_sample_image(struct.get("file_name", "BIM"), variant=0)
+                first_rooms = bdata["floors"][0]["rooms"] if bdata.get("floors") else []
+                if first_rooms:
+                    st.session_state.uploaded_image, _ = render_room_plan(
+                        first_rooms, bdata["floors"][0]["floor_name"])
+                else:
+                    st.session_state.uploaded_image = generate_sample_image(struct.get("file_name", "BIM"), variant=0)
                 st.session_state.civil_results = []
                 st.session_state.eee_results = []
                 st.session_state.building_results = []
@@ -544,7 +550,11 @@ elif st.session_state.page == "upload":
             if demo_path.exists():
                 st.session_state.uploaded_image = Image.open(demo_path)
             else:
-                st.session_state.uploaded_image = generate_sample_image(first_fname, variant=0)
+                demo_rooms = DEMO_DATA["floors"][0].get("rooms", [])
+                if demo_rooms:
+                    st.session_state.uploaded_image, _ = render_room_plan(demo_rooms, first_fname)
+                else:
+                    st.session_state.uploaded_image = generate_sample_image(first_fname, variant=0)
             st.session_state.building_data = DEMO_DATA
             st.session_state.review_loading = True
             st.rerun()
@@ -698,12 +708,21 @@ elif st.session_state.page == "results":
         floor_civ = [i for i in civil_r if i.get("floor_id") == fid]
         floor_eee = [i for i in eee_r if i.get("floor_id") == fid]
         floor_issues = floor_civ + floor_eee
+        rooms = floor.get("rooms", [])
 
-        base_img = generate_sample_image(fname, variant=fi)
-        annotated_by_floor[fname] = annotate_image(base_img, floor_issues)
-        correction_by_floor[fname] = generate_correction_image(
-            base_img, floor_civ, floor_eee, conflicts, bdata, fname, variant=fi
-        )
+        if rooms:
+            # data-driven plan — real rooms packed by area, markers on room centroids
+            base_img, room_map = render_room_plan(rooms, fname)
+            annotated_by_floor[fname] = annotate_room_plan(base_img, floor_issues, room_map)
+            correction_by_floor[fname] = generate_correction_image(
+                base_img, floor_civ, floor_eee, conflicts, bdata, fname,
+                variant=fi, base_plan=base_img, room_map=room_map)
+        else:
+            base_img = generate_sample_image(fname, variant=fi)
+            annotated_by_floor[fname] = annotate_image(base_img, floor_issues)
+            correction_by_floor[fname] = generate_correction_image(
+                base_img, floor_civ, floor_eee, conflicts, bdata, fname, variant=fi
+            )
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
     for fname, img in annotated_by_floor.items():
