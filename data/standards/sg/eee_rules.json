@@ -10,7 +10,7 @@
         "condition_operator": "in",
         "condition_threshold": ["Corridor", "Stairwell", "Vestibule"],
         "severity": "High",
-        "code_ref": "SS 551 Cl.5.2",
+        "code_ref": "SS 563",
         "message": "{room_name} (type: {condition_value}) lacks emergency lighting. Install self-contained luminaire."
     },
     {
@@ -22,7 +22,7 @@
         "threshold": 1.5,
         "unit": "m",
         "severity": "Medium",
-        "code_ref": "CP 5 Cl.4.2.3",
+        "code_ref": "SS 638",
         "message": "Panel is only {value}m from water source, {threshold}m minimum required. Relocate panel or provide IP-rated enclosure."
     },
     {
@@ -34,19 +34,19 @@
         "threshold": 32,
         "unit": "A",
         "severity": "Medium",
-        "code_ref": "CP 5 Cl.4.3.2",
+        "code_ref": "SS 638",
         "message": "Circuit load {value}A exceeds limit {threshold}A (ring circuit rating). Split circuit or use radial circuit."
     },
     {
         "id": "EEE-004",
         "name": "Socket Outlet Coverage Check",
-        "description": "Socket outlets provided for intended use; no hard spacing limit in CP 5",
+        "description": "Socket outlets provided for intended use; no hard spacing limit in SS 638",
         "field": "outlet_spacing_m",
         "operator": "<=",
         "threshold": 10,
         "unit": "m",
         "severity": "Low",
-        "code_ref": "SS 531 Cl.6.2 (advisory)",
+        "code_ref": "SS 531 (advisory)",
         "message": "Outlet spacing {value}m exceeds advisory guideline {threshold}m. Additional outlets recommended based on point-of-use assessment."
     }
 ]

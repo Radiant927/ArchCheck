@@ -8,7 +8,7 @@
         "threshold": 30,
         "unit": "m",
         "severity": "High",
-        "code_ref": "GB 50016 5.5.17",
+        "code_ref": "GB 50016",
         "message": "走廊长度 {value}m 超过限值 {threshold}m，需增设避难走道或重新设计疏散路线。"
     },
     {
@@ -20,7 +20,7 @@
         "threshold": 2500,
         "unit": "sqm",
         "severity": "High",
-        "code_ref": "GB 50016 5.3.1",
+        "code_ref": "GB 50016",
         "message": "防火分区面积 {value}m² 超过限值 {threshold}m²，需增设防火分隔。"
     },
     {
@@ -34,7 +34,7 @@
         "condition_operator": ">",
         "condition_threshold": 50,
         "severity": "Medium",
-        "code_ref": "GB 50016 5.5.8",
+        "code_ref": "GB 50016",
         "message": "房间面积 {condition_value}m² 超过 {condition_threshold}m²，仅设 {value} 个出口，至少需要 {threshold} 个。"
     },
     {
@@ -46,7 +46,7 @@
         "threshold": 0.9,
         "unit": "m",
         "severity": "Low",
-        "code_ref": "GB 50016 5.5.18",
+        "code_ref": "GB 50016",
         "message": "门净宽 {value}m 小于要求的 {threshold}m，需加宽疏散门。"
     }
 ]

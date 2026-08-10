@@ -8,7 +8,7 @@
         "threshold": 30,
         "unit": "m",
         "severity": "High",
-        "code_ref": "FC23 Cl.2.3.2",
+        "code_ref": "FC23",
         "message": "Travel distance {value}m exceeds limit {threshold}m (dead-end corridor ≤ 15m, one-direction ≤ 30m). Add refuge area or redesign escape route."
     },
     {
@@ -20,7 +20,7 @@
         "threshold": 5000,
         "unit": "sqm",
         "severity": "High",
-        "code_ref": "FC23 Cl.2.2.1",
+        "code_ref": "FC23",
         "message": "Fire compartment area {value}m² exceeds limit {threshold}m² for sprinkler-protected buildings. Add fire separation walls."
     },
     {
@@ -34,7 +34,7 @@
         "condition_operator": ">",
         "condition_threshold": 50,
         "severity": "Medium",
-        "code_ref": "FC23 Cl.2.3.1",
+        "code_ref": "FC23",
         "message": "Room area {condition_value}m² exceeds {condition_threshold}m², only {value} exit(s) provided, minimum {threshold} required."
     },
     {
@@ -46,7 +46,7 @@
         "threshold": 0.9,
         "unit": "m",
         "severity": "Low",
-        "code_ref": "FC23 Cl.2.3.4",
+        "code_ref": "FC23",
         "message": "Door clear width {value}m below required {threshold}m. Widen exit door."
     }
 ]

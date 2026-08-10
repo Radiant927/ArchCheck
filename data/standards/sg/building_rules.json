@@ -8,7 +8,7 @@
         "threshold": 3.0,
         "unit": "m",
         "severity": "High",
-        "code_ref": "FC23 Cl.2.3.4",
+        "code_ref": "FC23",
         "message": "Ground floor exit width {value}m below required {threshold}m based on maximum floor occupant load. Widen exit discharge."
     },
     {
@@ -20,7 +20,7 @@
         "threshold": 180,
         "unit": "m³",
         "severity": "High",
-        "code_ref": "FC23 Cl.6.3 / SS 575",
+        "code_ref": "FC23 / SS 575",
         "message": "Fire water tank capacity {value}m³ below required {threshold}m³. Increase storage per hydrant and sprinkler demand."
     },
     {
@@ -32,7 +32,7 @@
         "threshold": 750,
         "unit": "kW",
         "severity": "Medium",
-        "code_ref": "CP 5 Cl.3.3",
+        "code_ref": "SS 638",
         "message": "Transformer capacity {value}kW below total building demand {threshold}kW. Upgrade or add transformer unit."
     },
     {
@@ -44,7 +44,7 @@
         "threshold": 60,
         "unit": "min",
         "severity": "High",
-        "code_ref": "SS 551 Cl.5.3 / FC23 Cl.6.4",
+        "code_ref": "SS 563 / FC23",
         "message": "Emergency power duration {value}min below required {threshold}min. Increase battery capacity or connect to standby generator."
     }
 ]

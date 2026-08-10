@@ -8,7 +8,7 @@
         "threshold": 3.0,
         "unit": "m",
         "severity": "High",
-        "code_ref": "GB 50016 5.5.19",
+        "code_ref": "GB 50016",
         "message": "首层疏散外门总净宽 {value}m 小于要求 {threshold}m，按全楼最大层人数核算净宽不足，需加宽首层外门。"
     },
     {
@@ -20,7 +20,7 @@
         "threshold": 216,
         "unit": "m³",
         "severity": "High",
-        "code_ref": "GB 50974 4.3.2",
+        "code_ref": "GB 50974",
         "message": "消防水池容积 {value}m³ 小于要求 {threshold}m³（按消火栓 3h + 喷淋 1h 合计），需扩大水池容量。"
     },
     {
@@ -32,7 +32,7 @@
         "threshold": 750,
         "unit": "kW",
         "severity": "Medium",
-        "code_ref": "GB 50054 3.3",
+        "code_ref": "GB 50054",
         "message": "变压器装机容量 {value}kW 小于全楼计算负荷 {threshold}kW，需增容或增设变压器。"
     },
     {
@@ -44,7 +44,7 @@
         "threshold": 90,
         "unit": "min",
         "severity": "High",
-        "code_ref": "GB 51309 3.2.4",
+        "code_ref": "GB 51309",
         "message": "应急照明备用电源持续时间 {value}min 小于要求 {threshold}min，需增大蓄电池容量。"
     }
 ]
