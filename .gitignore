@@ -40,5 +40,8 @@ output/*.ifc
 # Jupyter
 .ipynb_checkpoints/
 
+# RAG knowledge base (downloaded standards/statutes — large, regenerable)
+data/rag_kb/
+
 # Keep folder structure
 !output/.gitkeep
