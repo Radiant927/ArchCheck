@@ -500,6 +500,24 @@ elif st.session_state.page == "upload":
             except Exception as ex:
                 st.error(f'{T["ifc_parse_fail"]}: {ex}')
             else:
+                # Model usability QA: health dashboard + fatal gate (BIM Reader agent)
+                qa = struct.get("qa") or {}
+                if qa:
+                    st.markdown(f"### {T['model_health']}")
+                    hm1, hm2 = st.columns([1, 3])
+                    hm1.metric(T["qa_score"], f"{qa.get('score', 0)}/100")
+                    hm2.progress(max(0, min(100, qa.get('score', 0))) / 100)
+                    for ch in qa.get("checks", []):
+                        lvl = ch["level"]; msg = ch["message"]
+                        if lvl == "error":
+                            st.error(msg)
+                        elif lvl == "warn":
+                            st.warning(msg)
+                        else:
+                            st.info(msg)
+                    if qa.get("fatal"):
+                        st.error(T["qa_blocked"])
+                        st.stop()
                 # rooms come from the IFC when present; otherwise empty (no fabrication)
                 bdata = build_review_data(struct)
                 st.session_state.building_data = bdata
