@@ -407,7 +407,11 @@ def _compute_travel_distances(space_geom, door_room, door_geom, scale):
 
 
 def _classify_room_type(name):
-    """Map a space name/reference to a review-room type."""
+    """Map a space name/reference to a review-room type.
+
+    Returns "Unknown" when nothing matches — we do not guess "Office" for rooms
+    whose function is not indicated in the model (honest data policy).
+    """
     n = (name or "").lower()
     if any(k in n for k in ("stair", "楼梯", "梯")):
         return "Stairwell"
@@ -419,7 +423,9 @@ def _classify_room_type(name):
         return "Equipment Room"
     if any(k in n for k in ("wc", "toilet", "洗手", "厕所")):
         return "Vestibule"
-    return "Office"
+    if any(k in n for k in ("office", "办公")):
+        return "Office"
+    return "Unknown"
 
 
 def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, hull=None):

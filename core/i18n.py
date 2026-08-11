@@ -48,6 +48,8 @@ _I18N = {
         "src_model": "来自模型",
         "src_default": "默认·待填写",
         "section_t": "整栋建筑剖面",
+        "plans_t": "上传模型 · 平面图",
+        "plans_h": "由 IFC 自动生成：3D 立体视图 · 每层俯视图 · 建筑剖面",
         "view3d_t": "3D 立体视图",
         "view_top_t": "俯视图",
         "section_h": "全楼楼层纵向关联 — 每层标注消防/电气问题，整栋系统校核（消防水池/变压器/应急电源/首层疏散总宽）贯通全楼。",
@@ -194,6 +196,7 @@ _I18N = {
         "rt_meeting": "会议室",
         "rt_equipment": "设备间",
         "rt_vestibule": "前室",
+        "rt_unknown": "未知",
         "report_title": "审查报告",
         "report_sub": "多层建筑自动合规审查",
         "report_loc": "位置",
@@ -319,6 +322,8 @@ _I18N = {
         "src_model": "From model",
         "src_default": "Default — fill in",
         "section_t": "Building Section",
+        "plans_t": "Uploaded Model · Plan Views",
+        "plans_h": "Auto-generated from the IFC: 3D isometric view, per-floor top view, building section.",
         "view3d_t": "3D Isometric View",
         "view_top_t": "Top view",
         "section_h": "Vertical whole-building view — each floor's fire/electrical issues plus whole-building system checks (fire water, transformer, emergency power, ground-floor egress) spanning all floors.",
@@ -466,6 +471,7 @@ _I18N = {
         "rt_meeting": "Meeting Room",
         "rt_equipment": "Equipment Room",
         "rt_vestibule": "Vestibule",
+        "rt_unknown": "Unknown",
         "report_title": "Review Report",
         "report_sub": "Automated Multi-Floor Building Plan Review",
         "report_loc": "LOC",
@@ -558,6 +564,7 @@ def _room_type_label(rtype):
         "Office": T["rt_office"], "Corridor": T["rt_corridor"],
         "Stairwell": T["rt_stairwell"], "Meeting Room": T["rt_meeting"],
         "Equipment Room": T["rt_equipment"], "Vestibule": T["rt_vestibule"],
+        "Unknown": T["rt_unknown"],
     }
     return mapping.get(rtype, rtype)
 

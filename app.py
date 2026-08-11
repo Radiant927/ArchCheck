@@ -637,27 +637,6 @@ elif st.session_state.page == "upload":
                     st.markdown(f'<div style="font-size:13px;color:{C["muted"]};padding:2px 0;">{line}</div>',
                                 unsafe_allow_html=True)
 
-        st.markdown(
-            f'<div style="font-size:13px;color:{C["silver"]};margin:12px 0;text-align:center;">'
-            f'{T["demo_or"]}</div>',
-            unsafe_allow_html=True,
-        )
-        if st.button(T["demo_btn"], width="stretch"):
-            demo_path = OUTPUT / "demo_architect_plan.png"
-            first_fname = _floor_label(DEMO_DATA["floors"][0].get("floor_name", "1F"))
-            if demo_path.exists():
-                st.session_state.uploaded_image = Image.open(demo_path)
-            else:
-                demo_rooms = DEMO_DATA["floors"][0].get("rooms", [])
-                if demo_rooms:
-                    st.session_state.uploaded_image, _ = render_room_plan(demo_rooms, first_fname)
-                else:
-                    st.session_state.uploaded_image = generate_sample_image(first_fname, variant=0)
-            st.session_state.building_data = DEMO_DATA
-            st.session_state.data_version = st.session_state.get("data_version", 0) + 1
-            st.session_state.review_loading = True
-            st.rerun()
-
     with c2:
         st.markdown(
             f'<div style="font-size:17px;font-weight:700;color:{C["text"]};margin-bottom:10px;">'
@@ -676,13 +655,31 @@ elif st.session_state.page == "upload":
         else:
             _render_params_editor(bdata)
 
+    # Uploaded IFC → generated plan views (3D / per-floor / section)
+    _bdata = st.session_state.get("building_data")
+    if _bdata and _bdata.get("floors"):
+        st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:22px;font-weight:700;color:{C["text"]};margin:8px 0 4px;">{T["plans_t"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:13px;color:{C["muted"]};margin-bottom:12px;">{T["plans_h"]}</div>', unsafe_allow_html=True)
+        p1, p2 = st.columns([3, 2])
+        with p1:
+            with st.container(border=True):
+                st.image(generate_building_3d(_bdata["floors"]), width="stretch")
+        with p2:
+            _fnn = [_floor_label(f.get("floor_name", f"F{i}")) for i, f in enumerate(_bdata["floors"])]
+            _fli = st.radio(T["floor_sel"], options=range(len(_fnn)), format_func=lambda i: _fnn[i], index=0, horizontal=True, label_visibility="collapsed", key="up_floor")
+            _plan, _rmap = render_room_plan(_bdata["floors"][_fli].get("rooms", []), _bdata["floors"][_fli].get("floor_name", ""))
+            with st.container(border=True):
+                st.image(_plan, width="stretch")
+        st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["text"]};margin:16px 0 6px;">{T["section_t"]}</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.image(generate_building_section(_bdata["floors"], [], [], [], []), width="stretch")
+
     if st.session_state.uploaded_image is not None:
         st.markdown("---")
         sc1, sc2, sc3 = st.columns([1, 2, 1])
         with sc2:
             if st.button(T["start_btn"], type="primary", width="stretch"):
-                if st.session_state.building_data is None:
-                    st.session_state.building_data = DEMO_DATA
                 st.session_state.review_loading = True
                 st.rerun()
 

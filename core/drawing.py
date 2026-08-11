@@ -260,6 +260,7 @@ ROOM_TYPE_FILL = {
     "Office": (233, 240, 248), "Corridor": (224, 236, 247),
     "Stairwell": (255, 246, 230), "Meeting Room": (238, 240, 252),
     "Equipment Room": (252, 234, 234), "Vestibule": (240, 244, 238),
+    "Unknown": (235, 235, 238),
 }
 
 
