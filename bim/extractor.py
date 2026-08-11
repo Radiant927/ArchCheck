@@ -86,6 +86,32 @@ def _door_shape_info(door, scale):
         return None, None
 
 
+def _ramp_slope(ramp, scale):
+    """Slope (rise/run) of an IfcRamp/IfcRampFlight from its geometry bbox.
+
+    Returns None for non-ramps / degenerate shapes (run ≈ 0 or vertical like a
+    stair). Rise is the z-extent; run is the longer horizontal extent.
+    """
+    try:
+        st = ifcgeom.settings()
+        st.set(st.USE_WORLD_COORDS, True)
+        shape = ifcgeom.create_shape(st, ramp)
+        v = shape.geometry.verts
+        if len(v) < 6:
+            return None
+        xs = v[0::3]
+        ys = v[1::3]
+        zs = v[2::3]
+        rise = (max(zs) - min(zs)) * scale
+        run = max(max(xs) - min(xs), max(ys) - min(ys)) * scale
+        if run <= 0.01:
+            return None
+        slope = rise / run
+        return round(slope, 4) if 0.0 < slope <= 1.0 else None
+    except Exception:
+        return None
+
+
 def _door_width_m(door, scale, geom_width=None):
     """Door width in metres, attribute-first.
 
@@ -455,12 +481,17 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         els = by_storey.get(storey.GlobalId, [])
         types = {}
         storey_door_widths = []
+        ramp_slopes = []
         for e in els:
             types[e.is_a()] = types.get(e.is_a(), 0) + 1
             if e.is_a("IfcDoor"):
                 w = door_meta.get(e.GlobalId)
                 if w:
                     storey_door_widths.append(w)
+            elif e.is_a("IfcRamp") or e.is_a("IfcRampFlight"):
+                s = _ramp_slope(e, scale)
+                if s is not None:
+                    ramp_slopes.append(s)
 
         spaces = storey_spaces.get(storey.GlobalId, [])
         sized = sorted(spaces, key=lambda s: -(space_geom.get(s.GlobalId, (None, 0.0))[1]))
@@ -487,6 +518,8 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "beams": types.get("IfcBeam", 0),
                 "slabs": types.get("IfcSlab", 0) + types.get("IfcSlabStandardCase", 0),
                 "stairs": types.get("IfcStair", 0),
+                "ramps": types.get("IfcRamp", 0) + types.get("IfcRampFlight", 0),
+                "ramp_slopes": sorted(ramp_slopes),
                 "door_widths_m": sorted(set(storey_door_widths)),
                 "door_count": len(storey_door_widths),
             },
@@ -525,16 +558,21 @@ def build_review_data(struct, rooms_template=None, floor_room_map=None):
             "fire_zones": [],
             "structure": f.get("structure"),
         })
+    all_ramp_slopes = [s for f in struct.get("floors", [])
+                       for s in (f.get("structure") or {}).get("ramp_slopes", [])]
+    bp = {
+        "total_floors": struct.get("storey_count", len(floors)),
+        "occupancy_type": "office",
+        "ground_floor_exit_width_m": 2.4,
+        "fire_pool_volume_m3": 160.0,
+        "transformer_capacity_kw": 650.0,
+        "emergency_power_duration_min": 60.0,
+    }
+    if all_ramp_slopes:
+        bp["max_ramp_slope"] = max(all_ramp_slopes)
     return {
         "project_name": struct.get("project_name") or "BIM Building",
         "source": "ifc",
-        "building_params": {
-            "total_floors": struct.get("storey_count", len(floors)),
-            "occupancy_type": "office",
-            "ground_floor_exit_width_m": 2.4,
-            "fire_pool_volume_m3": 160.0,
-            "transformer_capacity_kw": 650.0,
-            "emergency_power_duration_min": 60.0,
-        },
+        "building_params": bp,
         "floors": floors,
     }

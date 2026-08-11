@@ -46,5 +46,16 @@
         "severity": "High",
         "code_ref": "GB 51309",
         "message": "应急照明备用电源持续时间 {value}min 小于要求 {threshold}min，需增大蓄电池容量。"
+    },
+    {
+        "id": "BLD-005",
+        "name": "无障碍坡道坡度检查",
+        "description": "无障碍坡道坡度不应超过 1:12",
+        "field": "max_ramp_slope",
+        "operator": "<=",
+        "threshold": 0.0833,
+        "severity": "Medium",
+        "code_ref": "GB 50763",
+        "message": "坡道坡度 {value} 超过 1:12（0.083）无障碍最大限值，需重新设计坡道或增设电梯。"
     }
 ]

@@ -46,5 +46,16 @@
         "severity": "High",
         "code_ref": "SS 563 / FC23",
         "message": "Emergency power duration {value}min below required {threshold}min. Increase battery capacity or connect to standby generator."
+    },
+    {
+        "id": "BLD-005",
+        "name": "Ramp Slope Check",
+        "description": "Accessible ramp slope must not exceed 1:12",
+        "field": "max_ramp_slope",
+        "operator": "<=",
+        "threshold": 0.0833,
+        "severity": "Medium",
+        "code_ref": "BCA Code on Accessibility 2025",
+        "message": "Ramp slope {value} exceeds the 1:12 (0.083) maximum for accessible routes. Redesign the ramp or provide a lift."
     }
 ]
