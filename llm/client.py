@@ -4,8 +4,10 @@ Division of labour: the LLM does *reasoning / generation* only — review
 narratives, conflict coordination, rule authoring. Numeric compliance judgment
 stays in core/engine.py's deterministic rule engine.
 
-Endpoint: defaults to the local proxy (settings.json ANTHROPIC_BASE_URL), which
-serves DeepSeek models over the Anthropic Messages API. Override with env vars:
+Transport: plain `requests` to the local proxy's /v1/messages endpoint. The
+anthropic SDK (httpx transport) returns 502 against this proxy in this
+environment, so we avoid it. Endpoint defaults to the local proxy; override with
+env vars:
     LLM_BASE_URL   (default http://127.0.0.1:15721)
     LLM_API_KEY    (default PROXY_MANAGED)
     LLM_MODEL      (default deepseek-v4-flash)
@@ -14,54 +16,56 @@ serves DeepSeek models over the Anthropic Messages API. Override with env vars:
 import json
 import os
 
+import requests
+
 BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:15721")
 API_KEY = os.environ.get("LLM_API_KEY", "PROXY_MANAGED")
 MODEL = os.environ.get("LLM_MODEL", "deepseek-v4-flash")
 MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "1600"))
 
-_client = None
-
 
 def available():
-    """Whether the anthropic SDK is importable."""
+    """Whether the HTTP transport is importable."""
     try:
-        import anthropic  # noqa: F401
+        import requests  # noqa: F401
         return True
     except ImportError:
         return False
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        from anthropic import Anthropic
-        _client = Anthropic(api_key=API_KEY, base_url=BASE_URL)
-    return _client
 
 
 def chat(system, user, model=None, max_tokens=None, retries=3):
     """Single chat completion. Returns the assistant text (thinking skipped).
 
     Reasoning models may spend the whole token budget on thinking and return no
-    text — so on an empty response we retry with a larger budget.
+    text — so on an empty response (or a transient 502) we retry with a larger
+    budget.
     """
-    messages = []
+    body = {"model": model or MODEL, "max_tokens": max_tokens or MAX_TOKENS,
+            "messages": [{"role": "user", "content": user}]}
     if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": user})
-    budget = max_tokens or MAX_TOKENS
-    client = _get_client()
+        body["system"] = system
+    headers = {"x-api-key": API_KEY, "anthropic-version": "2023-06-01"}
+    budget = body["max_tokens"]
     for attempt in range(retries):
-        resp = client.messages.create(
-            model=model or MODEL,
-            max_tokens=budget,
-            messages=messages,
-        )
-        parts = [block.text for block in resp.content if block.type == "text"]
-        text = "".join(parts).strip()
-        if text:
-            return text
-        budget = min(budget * 2, 6000)  # escalate: thinking ate the budget
+        try:
+            resp = requests.post(f"{BASE_URL}/v1/messages", json=body,
+                                 headers=headers, timeout=120)
+            if resp.status_code != 200:
+                if resp.status_code == 502 and attempt < retries - 1:
+                    budget = min(budget * 2, 6000)
+                    body["max_tokens"] = budget
+                    continue
+                return ""
+            data = resp.json()
+            text = "".join(b.get("text", "") for b in data.get("content", [])
+                           if b.get("type") == "text").strip()
+            if text:
+                return text
+            budget = min(budget * 2, 6000)  # thinking ate the budget
+            body["max_tokens"] = budget
+        except Exception:
+            if attempt == retries - 1:
+                return ""
     return ""
 
 

@@ -49,10 +49,9 @@ def resolve_threshold(rule, item):
 
 def _llm_extract(query, code_ref):
     try:
-        system = "你是建筑规范数值提取器。只输出一个数字（单位米），不要任何解释或单位。"
-        user = (f"规范 {code_ref} 中：{query}。对应构造要求的最小数值（米）是多少？"
-                "只输出数字本身。")
-        out = client.chat(system, user, max_tokens=40)
+        system = "你是建筑规范数值提取器。"
+        user = f"{query}，最小数值（米），只输出数字"
+        out = client.chat(system, user)
         m = re.search(r"[-+]?\d*\.?\d+", out)
         if m:
             v = float(m.group(0))
