@@ -1034,38 +1034,46 @@ elif st.session_state.page == "architecture":
 
     st.markdown(f'<div style="font-size:24px;font-weight:700;color:{C["text"]};margin-bottom:12px;">{T["agents_t"]}</div>', unsafe_allow_html=True)
 
-    ag1, ag2, ag3, ag4 = st.columns(4)
+    ag1, ag2, ag3, ag4, ag5 = st.columns(5)
     with ag1:
         st.markdown(f'''<div class="agent-card">
         <div style="width:48px;height:48px;border-radius:4px;background:{C["blue"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">&#x1F3D7;</div>
-        <div style="font-weight:700;font-size:18px;color:{C["blue"]};">{T["agent_civil"]}</div>
-        <div style="font-size:13px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_civ_d"]}</div>
-        <div style="font-size:13px;color:{C["silver"]};margin-top:14px;line-height:1.7;white-space:pre-line;">{T["arch_agent_civ_c"]}</div>
-        <div style="margin-top:14px;padding:4px 10px;display:inline-block;background:{C["blue"]}12;border-radius:2px;font-size:12px;color:{C["blue"]};font-family:monospace;">{STD_META.get("civil_codes","")}</div>
+        <div style="font-weight:700;font-size:16px;color:{C["blue"]};">{T["agent_reader"]}</div>
+        <div style="font-size:12px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_reader_d"]}</div>
+        <div style="font-size:12px;color:{C["silver"]};margin-top:12px;line-height:1.6;white-space:pre-line;">{T["arch_agent_reader_c"]}</div>
+        <div style="margin-top:12px;padding:4px 8px;display:inline-block;background:{C["blue"]}12;border-radius:2px;font-size:11px;color:{C["blue"]};font-family:monospace;">{T["arch_agent_reader_tag"]}</div>
         </div>''', unsafe_allow_html=True)
     with ag2:
         st.markdown(f'''<div class="agent-card">
-        <div style="width:48px;height:48px;border-radius:4px;background:{C["orange"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">⚡</div>
-        <div style="font-weight:700;font-size:18px;color:{C["orange"]};">{T["agent_eee"]}</div>
-        <div style="font-size:13px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_eee_d"]}</div>
-        <div style="font-size:13px;color:{C["silver"]};margin-top:14px;line-height:1.7;white-space:pre-line;">{T["arch_agent_eee_c"]}</div>
-        <div style="margin-top:14px;padding:4px 10px;display:inline-block;background:{C["orange"]}12;border-radius:2px;font-size:12px;color:{C["orange"]};font-family:monospace;">{STD_META.get("eee_codes","")}</div>
+        <div style="width:48px;height:48px;border-radius:4px;background:{C["orange"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">&#x2696;</div>
+        <div style="font-weight:700;font-size:16px;color:{C["orange"]};">{T["agent_judge"]}</div>
+        <div style="font-size:12px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_judge_d"]}</div>
+        <div style="font-size:12px;color:{C["silver"]};margin-top:12px;line-height:1.6;white-space:pre-line;">{T["arch_agent_judge_c"]}</div>
+        <div style="margin-top:12px;padding:4px 8px;display:inline-block;background:{C["orange"]}12;border-radius:2px;font-size:11px;color:{C["orange"]};font-family:monospace;">{T["arch_agent_judge_tag"]}</div>
         </div>''', unsafe_allow_html=True)
     with ag3:
         st.markdown(f'''<div class="agent-card">
-        <div style="width:48px;height:48px;border-radius:4px;background:{C["purple"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">🏢</div>
-        <div style="font-weight:700;font-size:18px;color:{C["purple"]};">{T["agent_bld"]}</div>
-        <div style="font-size:13px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_bld_d"]}</div>
-        <div style="font-size:13px;color:{C["silver"]};margin-top:14px;line-height:1.7;white-space:pre-line;">{T["arch_agent_bld_c"]}</div>
-        <div style="margin-top:14px;padding:4px 10px;display:inline-block;background:{C["purple"]}12;border-radius:2px;font-size:12px;color:{C["purple"]};font-family:monospace;">{T["arch_agent_bld_tag"]}</div>
+        <div style="width:48px;height:48px;border-radius:4px;background:{C["purple"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">&#x1F4DA;</div>
+        <div style="font-weight:700;font-size:16px;color:{C["purple"]};">{T["agent_kb"]}</div>
+        <div style="font-size:12px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_kb_d"]}</div>
+        <div style="font-size:12px;color:{C["silver"]};margin-top:12px;line-height:1.6;white-space:pre-line;">{T["arch_agent_kb_c"]}</div>
+        <div style="margin-top:12px;padding:4px 8px;display:inline-block;background:{C["purple"]}12;border-radius:2px;font-size:11px;color:{C["purple"]};font-family:monospace;">{T["arch_agent_kb_tag"]}</div>
         </div>''', unsafe_allow_html=True)
     with ag4:
         st.markdown(f'''<div class="agent-card">
-        <div style="width:48px;height:48px;border-radius:4px;background:{C["red"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">&#x1F517;</div>
-        <div style="font-weight:700;font-size:18px;color:{C["red"]};">{T["agent_coord"]}</div>
-        <div style="font-size:13px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_coord_d"]}</div>
-        <div style="font-size:13px;color:{C["silver"]};margin-top:14px;line-height:1.7;white-space:pre-line;">{T["arch_agent_coord_c"]}</div>
-        <div style="margin-top:14px;padding:4px 10px;display:inline-block;background:{C["red"]}12;border-radius:2px;font-size:12px;color:{C["red"]};font-family:monospace;">{T["arch_agent_coord_tag"]}</div>
+        <div style="width:48px;height:48px;border-radius:4px;background:{C["red"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">&#x1F50D;</div>
+        <div style="font-weight:700;font-size:16px;color:{C["red"]};">{T["agent_reviewer"]}</div>
+        <div style="font-size:12px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_reviewer_d"]}</div>
+        <div style="font-size:12px;color:{C["silver"]};margin-top:12px;line-height:1.6;white-space:pre-line;">{T["arch_agent_reviewer_c"]}</div>
+        <div style="margin-top:12px;padding:4px 8px;display:inline-block;background:{C["red"]}12;border-radius:2px;font-size:11px;color:{C["red"]};font-family:monospace;">{T["arch_agent_reviewer_tag"]}</div>
+        </div>''', unsafe_allow_html=True)
+    with ag5:
+        st.markdown(f'''<div class="agent-card">
+        <div style="width:48px;height:48px;border-radius:4px;background:{C["green"]}18;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;">&#x1F9E0;</div>
+        <div style="font-weight:700;font-size:16px;color:{C["green"]};">{T["agent_reasoner"]}</div>
+        <div style="font-size:12px;color:{C["muted"]};margin-top:4px;">{T["arch_agent_reasoner_d"]}</div>
+        <div style="font-size:12px;color:{C["silver"]};margin-top:12px;line-height:1.6;white-space:pre-line;">{T["arch_agent_reasoner_c"]}</div>
+        <div style="margin-top:12px;padding:4px 8px;display:inline-block;background:{C["green"]}12;border-radius:2px;font-size:11px;color:{C["green"]};font-family:monospace;">{T["arch_agent_reasoner_tag"]}</div>
         </div>''', unsafe_allow_html=True)
 
     st.markdown(f'<div style="font-size:24px;font-weight:700;color:{C["text"]};margin:32px 0 12px;">{T["pipeline_t"]}</div>', unsafe_allow_html=True)
