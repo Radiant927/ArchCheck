@@ -838,8 +838,10 @@ elif st.session_state.page == "results":
 
     st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
 
-    # Building cross-section: visual floor connection
+    # ② whole-building section — vertical view of all floors
     sec_img = generate_building_section(floors, civil_r, eee_r, building_r, conflicts)
+    st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["text"]};margin:24px 0 4px;">{T["section_t"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:13px;color:{C["muted"]};margin-bottom:12px;max-width:860px;">{T["section_h"]}</div>', unsafe_allow_html=True)
     sec_col1, sec_col2 = st.columns([3, 2])
     with sec_col1:
         st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)

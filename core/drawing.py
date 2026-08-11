@@ -285,27 +285,47 @@ def render_room_plan(rooms, floor_name=""):
                   fill=(150, 155, 165), font=fm)
         return img, room_map
 
-    areas = [max(float(r.get("room_area_sqm", 20)), 4.0) for r in rooms]
-    rects = _treemap(areas)
-    for r, (nx, ny, nw, nh) in zip(rooms, rects):
-        x1 = int(dx1 + nx * aw)
-        y1 = int(dy1 + ny * ah)
-        x2 = int(dx1 + (nx + nw) * aw)
-        y2 = int(dy1 + (ny + nh) * ah)
-        fill = ROOM_TYPE_FILL.get(r.get("type", "Office"), ROOM_TYPE_FILL["Office"])
-        draw.rectangle([x1, y1, x2, y2], fill=fill, outline=(120, 130, 142), width=2)
-        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-        name = str(r.get("name", "?"))
-        area_txt = f'{float(r.get("room_area_sqm", 0)):.0f}m²'
-        if (x2 - x1) > 120 and (y2 - y1) > 46:
-            nb = draw.textbbox((0, 0), name, font=fm)
-            draw.text((cx - (nb[2] - nb[0]) // 2, cy - 18), name, fill=(30, 35, 45), font=fm)
-            ab = draw.textbbox((0, 0), area_txt, font=fs)
-            draw.text((cx - (ab[2] - ab[0]) // 2, cy + 14), area_txt, fill=(90, 100, 112), font=fs)
-        else:
-            nb = draw.textbbox((0, 0), name, font=fs)
-            draw.text((cx - (nb[2] - nb[0]) // 2, cy - 8), name, fill=(30, 35, 45), font=fs)
-        room_map[name] = (cx, cy)
+    if rooms and all(r.get("hull") for r in rooms):
+        # Real IFC geometry — draw the actual room footprint polygons (hulls).
+        _all = [p for r in rooms for p in r["hull"]]
+        _minx = min(p[0] for p in _all); _maxx = max(p[0] for p in _all)
+        _miny = min(p[1] for p in _all); _maxy = max(p[1] for p in _all)
+        _spanx = max(_maxx - _minx, 1e-6); _spany = max(_maxy - _miny, 1e-6)
+        _scale = min((aw - 40) / _spanx, (ah - 40) / _spany)
+        _ox = dx1 + (aw - _spanx * _scale) / 2
+        _oy = dy1 + (ah - _spany * _scale) / 2
+        for r in rooms:
+            _poly = [(int(_ox + (x - _minx) * _scale), int(_oy + (y - _miny) * _scale)) for x, y in r["hull"]]
+            _fill = ROOM_TYPE_FILL.get(r.get("type", "Office"), ROOM_TYPE_FILL["Office"])
+            draw.polygon(_poly, fill=_fill, outline=(120, 130, 142))
+            _cx = int(sum(p[0] for p in _poly) / len(_poly))
+            _cy = int(sum(p[1] for p in _poly) / len(_poly))
+            _nm = str(r.get("name", "?"))
+            _nb = draw.textbbox((0, 0), _nm, font=fm)
+            draw.text((_cx - (_nb[2] - _nb[0]) // 2, _cy - 12), _nm, fill=(30, 35, 45), font=fm)
+            room_map[_nm] = (_cx, _cy)
+    else:
+        areas = [max(float(r.get("room_area_sqm", 20)), 4.0) for r in rooms]
+        rects = _treemap(areas)
+        for r, (nx, ny, nw, nh) in zip(rooms, rects):
+            x1 = int(dx1 + nx * aw)
+            y1 = int(dy1 + ny * ah)
+            x2 = int(dx1 + (nx + nw) * aw)
+            y2 = int(dy1 + (ny + nh) * ah)
+            fill = ROOM_TYPE_FILL.get(r.get("type", "Office"), ROOM_TYPE_FILL["Office"])
+            draw.rectangle([x1, y1, x2, y2], fill=fill, outline=(120, 130, 142), width=2)
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            name = str(r.get("name", "?"))
+            area_txt = f'{float(r.get("room_area_sqm", 0)):.0f}m²'
+            if (x2 - x1) > 120 and (y2 - y1) > 46:
+                nb = draw.textbbox((0, 0), name, font=fm)
+                draw.text((cx - (nb[2] - nb[0]) // 2, cy - 18), name, fill=(30, 35, 45), font=fm)
+                ab = draw.textbbox((0, 0), area_txt, font=fs)
+                draw.text((cx - (ab[2] - ab[0]) // 2, cy + 14), area_txt, fill=(90, 100, 112), font=fs)
+            else:
+                nb = draw.textbbox((0, 0), name, font=fs)
+                draw.text((cx - (nb[2] - nb[0]) // 2, cy - 8), name, fill=(30, 35, 45), font=fs)
+            room_map[name] = (cx, cy)
 
     # legend
     ly = H - 60

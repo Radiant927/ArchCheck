@@ -422,14 +422,15 @@ def _classify_room_type(name):
     return "Office"
 
 
-def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None):
+def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, hull=None):
     """Build a review-engine room dict from a real IfcSpace.
 
     exit_count and door_width_m come from the real doors associated with the
     space. door_widths=None means the model has no usable door data -> both are
     None so the engine reports "data missing"; door_widths=[] is a real room
     with no doors (exit_count 0). travel_distance is the computed egress path
-    (m) to the nearest exit room, feeding corridor_length_m.
+    (m) to the nearest exit room, feeding corridor_length_m. hull (if any) is
+    the room's footprint polygon in model units, used to draw a real floor plan.
     """
     name = space.Name or "?"
     rtype = _classify_room_type(f"{ref} {name}")
@@ -452,6 +453,7 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None):
         "circuit_load_a": 10,
         "outlet_spacing_m": 5.0,
         "corridor_length_m": travel_distance or 0,
+        "hull": hull,
     }
 
 
@@ -564,12 +566,13 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
             sized = sized[:max_rooms_per_floor]
         rooms = []
         for s in sized:
-            area = space_geom.get(s.GlobalId, (None, 0.0, None))[1]
+            _sg = space_geom.get(s.GlobalId, (None, 0.0, None))
+            area = _sg[1]
             widths = None
             if door_meta:  # model has doors: report real per-room door data
                 widths = [door_meta[g] for g in door_room.get(s.GlobalId, set()) if g in door_meta]
             rooms.append(_space_to_room(s, area, ref_map.get(s.GlobalId, ""), widths,
-                                        travel.get(s.GlobalId)))
+                                        travel.get(s.GlobalId), _sg[0]))
 
         floors.append({
             "name": storey.Name or "?",
