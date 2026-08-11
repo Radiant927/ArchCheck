@@ -781,20 +781,23 @@ elif st.session_state.page == "results":
     _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
     _n_man = sum(1 for i in all_issues if i.get("review_status") == "manual")
     _n_disc = sum(1 for r in (civil_r, eee_r, building_r, structural_r) if r)
+    _trust = round(_n_ver / len(all_issues) * 100) if all_issues else 100
 
     s1, s2, s3, s4, s5, s6 = st.columns(6)
     with s1:
-        st.markdown(f'<div class="aicher-stat blue"><div class="value">{len(all_issues)}</div><div class="label">{T["s_total"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat green"><div class="value">{_trust}%</div><div class="label">🛡️ {T["trust_t"]}</div></div>', unsafe_allow_html=True)
     with s2:
-        st.markdown(f'<div class="aicher-stat green"><div class="value">{_n_ver}</div><div class="label">✅ {T["review_verified"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat blue"><div class="value">{len(all_issues)}</div><div class="label">{T["s_total"]}</div></div>', unsafe_allow_html=True)
     with s3:
-        st.markdown(f'<div class="aicher-stat orange"><div class="value">{_n_man}</div><div class="label">⚠️ {T["review_manual"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat blue"><div class="value">{_n_ver}</div><div class="label">✅ {T["review_verified"]}</div></div>', unsafe_allow_html=True)
     with s4:
-        st.markdown(f'<div class="aicher-stat red"><div class="value">{len(conflicts)}</div><div class="label">{T["s_conf"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat orange"><div class="value">{_n_man}</div><div class="label">⚠️ {T["review_manual"]}</div></div>', unsafe_allow_html=True)
     with s5:
-        st.markdown(f'<div class="aicher-stat purple"><div class="value">{_n_disc}</div><div class="label">{T["s_disc"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat red"><div class="value">{len(conflicts)}</div><div class="label">{T["s_conf"]}</div></div>', unsafe_allow_html=True)
     with s6:
-        st.markdown(f'<div class="aicher-stat blue"><div class="value">{high}</div><div class="label">{T["s_high"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat purple"><div class="value">{_n_disc}</div><div class="label">{T["s_disc"]}</div></div>', unsafe_allow_html=True)
+    if _n_man:
+        st.caption(T["trust_note"])
 
     # Standard-switching diff summary
     if added_in_other or removed_in_other:
@@ -957,8 +960,8 @@ elif st.session_state.page == "results":
             ref_label = T["ref"]
             _tc = {"civil": C["blue"], "eee": C["orange"], "building": C["purple"],
                    "structural": C["green"], "conflict": C["red"]}
-            _tl = {"civil": T["s_civil"], "eee": T["s_eee"], "building": T["s_bld"],
-                   "structural": T["s_str"], "conflict": T["s_conf"]}
+            _tl = {"civil": T["disc_civil"], "eee": T["disc_eee"], "building": T["disc_bld"],
+                   "structural": T["disc_str"], "conflict": T["disc_conf"]}
             _itype = iss.get("type", "")
             _tag = (f'<span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;'
                     f'font-size:12px;font-weight:600;background:{_tc.get(_itype, C["silver"])}18;'
@@ -978,7 +981,15 @@ elif st.session_state.page == "results":
             </div>''', unsafe_allow_html=True)
 
     # ② Compliance Judge — unified findings, each tagged by discipline
+    _fopt = {T["disc_civil"]: "civil", T["disc_eee"]: "eee", T["disc_bld"]: "building",
+             T["disc_str"]: "structural", T["disc_conf"]: "conflict"}
+    _flt = st.radio(
+        "filter", options=[T["filter_all"]] + list(_fopt.keys()),
+        horizontal=True, label_visibility="collapsed", key="find_flt")
     _findings = civil_r + eee_r + building_r + structural_r
+    if _flt != T["filter_all"]:
+        _fid = _fopt[_flt]
+        _findings = [i for i in _findings if i.get("type") == _fid]
     if _findings:
         render_issue_cards(_findings, "all")
     else:

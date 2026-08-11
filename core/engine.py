@@ -115,6 +115,9 @@ def run_rules(rules, item, prefix, floor_id=None, floor_name=None):
         msg = rule["message"].replace("{value}", str(value)).replace("{threshold}", str(threshold)).replace("{room_name}", str(room_name))
         if cond_value is not None:
             msg = msg.replace("{condition_value}", str(cond_value)).replace("{condition_threshold}", str(cond_threshold))
+        _dyn = rule.get("dynamic_threshold") or {}
+        if _dyn.get("formula"):
+            msg += f" （公式：{_dyn['formula']}）"
         violations.append({
             "title": rule["name"], "description": msg,
             "location": room_name, "severity": rule["severity"],
