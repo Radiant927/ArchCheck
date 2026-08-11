@@ -9,15 +9,17 @@ HERE = Path(__file__).resolve().parent.parent
 CIVIL_RULES = []
 EEE_RULES = []
 BUILDING_RULES = []
+STRUCTURAL_RULES = []
 STD_META = {}
 
 def load_standard(standard_id):
     """Load rules + meta for a given standard (cn / sg)."""
     base = DATA / "standards" / standard_id
-    fallback = {"civil": [], "eee": [], "building": [], "meta": {}}
+    fallback = {"civil": [], "eee": [], "building": [], "structural": [], "meta": {}}
     result = dict(fallback)
     for key, fname in [("civil", "civil_rules.json"), ("eee", "eee_rules.json"),
-                       ("building", "building_rules.json"), ("meta", "meta.json")]:
+                       ("building", "building_rules.json"),
+                       ("structural", "structural_rules.json"), ("meta", "meta.json")]:
         p = base / fname
         if p.exists():
             try:
@@ -39,11 +41,12 @@ DEMO_DATA = load_demo_data()
 
 def set_standard(standard_id):
     """Load a standard's rules + meta and switch the UI language."""
-    global CIVIL_RULES, EEE_RULES, BUILDING_RULES, STD_META
+    global CIVIL_RULES, EEE_RULES, BUILDING_RULES, STRUCTURAL_RULES, STD_META
     std = load_standard(standard_id)
     CIVIL_RULES = std["civil"]
     EEE_RULES = std["eee"]
     BUILDING_RULES = std["building"]
+    STRUCTURAL_RULES = std["structural"]
     STD_META = std["meta"]
     set_language(STD_META.get("language", "en"))
     return std
@@ -104,6 +107,7 @@ def run_full_review(bdata):
     civil_results = []
     eee_results = []
     building_results = []
+    structural_results = []
 
     for floor in bdata.get("floors", []):
         fid = floor.get("floor_id", "")
@@ -113,12 +117,14 @@ def run_full_review(bdata):
             eee_results.extend(run_rules(EEE_RULES, room, "eee", fid, fname))
         for zone in floor.get("fire_zones", []):
             civil_results.extend(run_rules(CIVIL_RULES, zone, "civil", fid, fname))
+        for elem in floor.get("structural_elements", []):
+            structural_results.extend(run_rules(STRUCTURAL_RULES, elem, "structural", fid, fname))
 
     bp = bdata.get("building_params", {})
     whole_label = _I18N[LANG]["whole_building"]
     building_results.extend(run_rules(BUILDING_RULES, bp, "building", None, whole_label))
 
-    all_issues = civil_results + eee_results + building_results
+    all_issues = civil_results + eee_results + building_results + structural_results
 
     # Conflict detection: same floor AND same location has both civil + eee
     loc_map = defaultdict(list)
@@ -150,17 +156,19 @@ def run_full_review(bdata):
         "civil_results": civil_results,
         "eee_results": eee_results,
         "building_results": building_results,
+        "structural_results": structural_results,
         "conflicts": conflicts,
         "all_issues": all_issues,
     }
 
 def run_review_with_standard(standard_id, bdata):
     """Run the full review under a different standard without switching globals."""
-    global CIVIL_RULES, EEE_RULES, BUILDING_RULES
-    saved = (CIVIL_RULES, EEE_RULES, BUILDING_RULES)
+    global CIVIL_RULES, EEE_RULES, BUILDING_RULES, STRUCTURAL_RULES
+    saved = (CIVIL_RULES, EEE_RULES, BUILDING_RULES, STRUCTURAL_RULES)
     std = load_standard(standard_id)
     CIVIL_RULES, EEE_RULES, BUILDING_RULES = std["civil"], std["eee"], std["building"]
+    STRUCTURAL_RULES = std["structural"]
     try:
         return run_full_review(bdata)
     finally:
-        CIVIL_RULES, EEE_RULES, BUILDING_RULES = saved
+        CIVIL_RULES, EEE_RULES, BUILDING_RULES, STRUCTURAL_RULES = saved

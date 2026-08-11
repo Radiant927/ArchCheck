@@ -79,39 +79,49 @@ def _elem_bbox_dims(elem, scale, settings):
         return None
 
 
-def _structural_sections(els, settings, scale, cap=15):
-    """Sample column/beam section sizes and slab thicknesses from storey elements.
+def _structural_sections(els, settings, scale, col_cap=200, other_cap=30):
+    """Sample structural element data from storey elements.
 
-    Tessellating every column/slab is expensive on real buildings, so at most
-    `cap` elements of each type are sampled. Column section = the two horizontal
-    extents; beam section = (depth, width); slab = thickness (z). Returns three
-    sorted deduped lists in metres.
+    Returns (elements, column_sections, beam_sections, slab_thicknesses).
+    ``elements`` is a per-element list (id/name/element_type + section fields)
+    that the review engine can judge; columns are sampled up to col_cap (they
+    drive the structural rule) while beams/slabs stay at other_cap to bound
+    tessellation cost on real buildings.
     """
-    col_sec, beam_sec, slab_th = [], [], []
+    elements, col_sec, beam_sec, slab_th = [], [], [], []
     ncol = nbeam = nslab = 0
     for e in els:
         if e.is_a("IfcColumn"):
-            if ncol >= cap:
+            if ncol >= col_cap:
                 continue
             ncol += 1
             d = _elem_bbox_dims(e, scale, settings)
             if d and 0.05 < min(d[:2]) and max(d[:2]) < 2.0:
-                col_sec.append(tuple(sorted((round(d[0], 3), round(d[1], 3)))))
+                w, dep = sorted((round(d[0], 3), round(d[1], 3)))
+                col_sec.append((w, dep))
+                elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
+                                 "element_type": "column", "section_min_m": w,
+                                 "section_max_m": dep})
         elif e.is_a("IfcBeam"):
-            if nbeam >= cap:
+            if nbeam >= other_cap:
                 continue
             nbeam += 1
             d = _elem_bbox_dims(e, scale, settings)
             if d and 0.05 < d[2] < 2.0:
                 beam_sec.append((round(d[2], 3), round(min(d[:2]), 3)))
+                elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
+                                 "element_type": "beam", "depth_m": round(d[2], 3),
+                                 "width_m": round(min(d[:2]), 3)})
         elif e.is_a("IfcSlab"):
-            if nslab >= cap:
+            if nslab >= other_cap:
                 continue
             nslab += 1
             d = _elem_bbox_dims(e, scale, settings)
             if d and 0.02 < d[2] < 1.0:
                 slab_th.append(round(d[2], 3))
-    return sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th))
+                elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
+                                 "element_type": "slab", "thickness_m": round(d[2], 3)})
+    return elements, sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th))
 
 
 def _door_shape_info(door, scale):
@@ -544,7 +554,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 s = _ramp_slope(e, scale)
                 if s is not None:
                     ramp_slopes.append(s)
-        col_sec, beam_sec, slab_th = _structural_sections(els, geom_settings, scale)
+        elements, col_sec, beam_sec, slab_th = _structural_sections(els, geom_settings, scale)
 
         spaces = storey_spaces.get(storey.GlobalId, [])
         sized = sorted(spaces, key=lambda s: -(space_geom.get(s.GlobalId, (None, 0.0))[1]))
@@ -580,6 +590,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "door_count": len(storey_door_widths),
             },
             "rooms": rooms,
+            "structural_elements": elements,
         })
 
     footprint = max((f["footprint_area_sqm"] for f in floors), default=0.0)
@@ -613,6 +624,7 @@ def build_review_data(struct, rooms_template=None, floor_room_map=None):
             "rooms": [dict(r) for r in rooms],
             "fire_zones": [],
             "structure": f.get("structure"),
+            "structural_elements": f.get("structural_elements", []),
         })
     all_ramp_slopes = [s for f in struct.get("floors", [])
                        for s in (f.get("structure") or {}).get("ramp_slopes", [])]

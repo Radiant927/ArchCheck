@@ -1,0 +1,17 @@
+[
+    {
+        "id": "STR-001",
+        "name": "Column Minimum Section Check",
+        "description": "Frame column minimum section dimension must not fall below the 300mm constructional minimum",
+        "field": "section_min_m",
+        "operator": ">=",
+        "threshold": 0.3,
+        "unit": "m",
+        "condition_field": "element_type",
+        "condition_operator": "==",
+        "condition_threshold": "column",
+        "severity": "Medium",
+        "code_ref": "SS EN 1992",
+        "message": "Column minimum section {value}m below constructional minimum {threshold}m. Increase column size."
+    }
+]

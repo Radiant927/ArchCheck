@@ -178,6 +178,7 @@ defaults = {
     "civil_results": [],
     "eee_results": [],
     "building_results": [],
+    "structural_results": [],
     "conflicts": [],
     "all_issues": [],
     "building_data": None,
@@ -387,6 +388,7 @@ if st.session_state.review_loading:
     st.session_state.civil_results = results["civil_results"]
     st.session_state.eee_results = results["eee_results"]
     st.session_state.building_results = results["building_results"]
+    st.session_state.structural_results = results["structural_results"]
     st.session_state.conflicts = results["conflicts"]
     st.session_state.all_issues = results["all_issues"]
     st.session_state.ai_report = None
@@ -532,6 +534,7 @@ elif st.session_state.page == "upload":
                 st.session_state.civil_results = []
                 st.session_state.eee_results = []
                 st.session_state.building_results = []
+                st.session_state.structural_results = []
                 st.session_state.conflicts = []
                 st.session_state.all_issues = []
                 total_doors = sum(f["structure"]["doors"] for f in struct["floors"])
@@ -687,6 +690,7 @@ elif st.session_state.page == "results":
     civil_r = st.session_state.get("civil_results", [])
     eee_r = st.session_state.get("eee_results", [])
     building_r = st.session_state.get("building_results", [])
+    structural_r = st.session_state.get("structural_results", [])
     conflicts = st.session_state.get("conflicts", [])
     all_issues = st.session_state.get("all_issues", [])
     bdata = st.session_state.get("building_data") or DEMO_DATA
@@ -906,10 +910,11 @@ elif st.session_state.page == "results":
 
     st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
 
-    t1, t2, t3, t4 = st.tabs([
+    t1, t2, t3, t4, t5 = st.tabs([
         f'{T["tab_civil"]} ({len(civil_r)})',
         f'{T["tab_eee"]} ({len(eee_r)})',
         f'{T["tab_bld"]} ({len(building_r)})',
+        f'{T["tab_str"]} ({len(structural_r)})',
         f'{T["tab_conf"]} ({len(conflicts)})',
     ])
 
@@ -949,6 +954,11 @@ elif st.session_state.page == "results":
             render_issue_cards(conflicts, "conflict")
         else:
             st.success(T["no_conflict"])
+    with t5:
+        if structural_r:
+            render_issue_cards(structural_r, "structural")
+        else:
+            st.success(T["no_issue"])
 
     # Building-level correction suggestions
     if building_r:
@@ -980,7 +990,7 @@ elif st.session_state.page == "results":
             correction_by_floor[first_floor].save(buf_c, format="PNG")
             st.download_button(T["dl_correction"], data=buf_c.getvalue(), file_name=f"correction_{first_floor}.png", mime="image/png", width="stretch")
     with dc3:
-        report_html = generate_report(annotated_by_floor, all_issues, civil_r, eee_r, building_r, conflicts, STD_META)
+        report_html = generate_report(annotated_by_floor, all_issues, civil_r, eee_r, building_r, structural_r, conflicts, STD_META)
         st.download_button(T["dl_report"], data=report_html, file_name="archcheck_report.html", mime="text/html", width="stretch")
     with dc4:
         if st.button(T["new_review"], width="stretch"):
@@ -989,6 +999,7 @@ elif st.session_state.page == "results":
             st.session_state.civil_results = []
             st.session_state.eee_results = []
             st.session_state.building_results = []
+            st.session_state.structural_results = []
             st.session_state.conflicts = []
             st.session_state.all_issues = []
             st.rerun()

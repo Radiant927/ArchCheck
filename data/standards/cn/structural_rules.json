@@ -1,0 +1,17 @@
+[
+    {
+        "id": "STR-001",
+        "name": "柱最小截面尺寸检查",
+        "description": "框架柱截面最小边不应小于构造要求 300mm",
+        "field": "section_min_m",
+        "operator": ">=",
+        "threshold": 0.3,
+        "unit": "m",
+        "condition_field": "element_type",
+        "condition_operator": "==",
+        "condition_threshold": "column",
+        "severity": "Medium",
+        "code_ref": "GB 50011",
+        "message": "柱截面最小边 {value}m 小于构造要求 {threshold}m，需加大柱截面。"
+    }
+]
