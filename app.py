@@ -259,12 +259,10 @@ with st.sidebar:
 
     st.markdown("---")
     page_labels = {"upload": T["nav_upload"], "results": T["nav_results"], "architecture": T["nav_arch"]}
-    current_idx = ["upload", "results", "architecture"].index(st.session_state.page)
     nav = st.radio(
         "Navigation",
         options=["upload", "results", "architecture"],
         format_func=lambda x: page_labels[x],
-        index=current_idx,
         key="nav_radio",
         label_visibility="collapsed",
     )
@@ -859,7 +857,7 @@ elif st.session_state.page == "results":
     sec_col1, sec_col2 = st.columns([3, 2])
     with sec_col1:
         st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-        st.image(sec_img, use_container_width=True)
+        st.image(sec_img, width="stretch")
         st.markdown('</div>', unsafe_allow_html=True)
     with sec_col2:
         bld_n = len(building_r)
@@ -906,13 +904,13 @@ elif st.session_state.page == "results":
         with bc1:
             st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["red"]};margin-bottom:6px;">{T["before_l"]} — {fname}</div>', unsafe_allow_html=True)
             st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-            st.image(annotated_by_floor[fname], use_container_width=True)
+            st.image(annotated_by_floor[fname], width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
             st.caption(T["before_cap"])
         with bc2:
             st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["green"]};margin-bottom:6px;">{T["after_l"]} — {fname}</div>', unsafe_allow_html=True)
             st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-            st.image(correction_by_floor[fname], use_container_width=True)
+            st.image(correction_by_floor[fname], width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
             st.caption(T["after_cap"])
 
