@@ -200,6 +200,82 @@ def goto(page):
     stored value is set in time and it won't bounce the page back."""
     st.session_state.page = page
     st.session_state.pending_page = page
+
+
+def _render_params_editor(bdata):
+    """Editable building + room parameters for the loaded building data."""
+    bp = bdata.get("building_params", {})
+    with st.expander(T["bld_params_t"], expanded=True):
+        st.caption(T["bld_params_caption"])
+        _dv = st.session_state.get("data_version", 0)
+        bp1, bp2 = st.columns(2)
+        bw = bp1.number_input(T["p_ground_exit"], value=float(bp.get("ground_floor_exit_width_m", 2.4)), step=0.1, key=f"bp_bw_{_dv}")
+        fp = bp2.number_input(T["p_fire_pool"], value=float(bp.get("fire_pool_volume_m3", 160)), step=10.0, key=f"bp_fp_{_dv}")
+        tc = bp1.number_input(T["p_transformer"], value=float(bp.get("transformer_capacity_kw", 650)), step=50.0, key=f"bp_tc_{_dv}")
+        ep = bp2.number_input(T["p_emergency"], value=float(bp.get("emergency_power_duration_min", 60)), step=10.0, key=f"bp_ep_{_dv}")
+        fl = bp1.number_input(T["p_floors"], value=int(bp.get("total_floors", 3)), min_value=1, max_value=20, step=1, key=f"bp_fl_{_dv}")
+        bp_updated = {
+            "total_floors": int(fl), "ground_floor_exit_width_m": bw,
+            "fire_pool_volume_m3": fp, "transformer_capacity_kw": tc,
+            "emergency_power_duration_min": ep,
+            "occupancy_type": bp.get("occupancy_type", "office"),
+            "fire_elevator_count": bp.get("fire_elevator_count", 1),
+        }
+    floors = bdata.get("floors", [])
+    floor_tabs = st.tabs([_floor_label(f.get("floor_name", f.get("floor_id", f"F{i}"))) for i, f in enumerate(floors)])
+    updated_floors = []
+    for ti, (tab, floor) in enumerate(zip(floor_tabs, floors)):
+        with tab:
+            updated_rooms = []
+            for room in floor.get("rooms", []):
+                rid = room["id"]
+                st.markdown(
+                    f'<span style="font-weight:700;font-size:14px;">{room["name"]}</span> '
+                    f'<span style="color:{C["silver"]};font-size:12px;">({_room_type_label(room["type"])})</span>',
+                    unsafe_allow_html=True,
+                )
+                a1, a2, a3, a4 = st.columns(4)
+                area = a1.number_input(T["p_area"], value=float(room.get("room_area_sqm", 0)), key=f"{rid}_a", step=5.0)
+                exits = a2.number_input(T["p_exits"], value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=4)
+                corr = a3.number_input(T["p_corridor"], value=float(room.get("corridor_length_m", 0)), key=f"{rid}_c", step=1.0)
+                light = a4.checkbox(T["p_light"], value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
+                b1, b2, b3, b4 = st.columns(4)
+                water = b1.number_input(T["p_water"], value=float(room.get("dist_to_water_m", 5.0)), key=f"{rid}_w", step=0.1)
+                circuit = b2.number_input(T["p_load"], value=float(room.get("circuit_load_a", 10)), key=f"{rid}_ld", step=1.0)
+                outlet = b3.number_input(T["p_outlet"], value=float(room.get("outlet_spacing_m", 5.0)), key=f"{rid}_o", step=0.5)
+                door = b4.number_input(T["p_door"], value=float(room.get("door_width_m") or 1.0), key=f"{rid}_d", step=0.1)
+                updated_rooms.append({
+                    "id": rid, "name": room["name"], "type": room["type"],
+                    "room_area_sqm": area, "exit_count": exits, "corridor_length_m": corr,
+                    "door_width_m": door, "has_emergency_light": light,
+                    "dist_to_water_m": water, "circuit_load_a": circuit, "outlet_spacing_m": outlet,
+                })
+                st.markdown(f'<div style="height:8px;"></div>', unsafe_allow_html=True)
+            updated_zones = []
+            for zone in floor.get("fire_zones", []):
+                za = st.number_input(
+                    f"{zone['name']} {T['p_fz_area']}",
+                    value=float(zone.get("fire_zone_area_sqm", 0)),
+                    key=f"{zone['id']}_z",
+                    step=50.0,
+                )
+                updated_zones.append({
+                    "id": zone["id"], "name": zone["name"],
+                    "fire_zone_area_sqm": za, "rooms": zone["rooms"],
+                })
+            updated_floors.append({
+                "floor_id": floor.get("floor_id", f"F{ti+1}"),
+                "floor_name": floor.get("floor_name", f"Floor {ti+1}"),
+                "rooms": updated_rooms,
+                "fire_zones": updated_zones,
+            })
+    if st.button(T["save_btn"], width="stretch"):
+        st.session_state.building_data = {
+            "project_name": bdata.get("project_name", "Building"),
+            "building_params": bp_updated,
+            "floors": updated_floors,
+        }
+        st.success(T["save_ok"])
 # ============================================================
 # ENGINE SETUP — load the current standard's rules + language
 # ============================================================
@@ -245,7 +321,7 @@ with st.sidebar:
     new_std = st.radio(
         "Standard",
         options=std_ids,
-        format_func=lambda x: f'{std_metas.get(x, {}).get("flag","")} {std_metas.get(x, {}).get("short_name", x)}',
+        format_func=lambda x: f'{std_metas.get(x, {}).get("flag","")} {std_metas.get(x, {}).get("category", x)}',
         index=std_idx,
         label_visibility="collapsed",
         key="std_radio",
@@ -480,18 +556,7 @@ elif st.session_state.page == "upload":
 
     with c1:
         st.markdown(
-            f'<div style="font-size:17px;font-weight:700;color:{C["text"]};margin-bottom:10px;">'
-            f'{T["upload_t"]}</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f'<p style="font-size:14px;color:{C["muted"]};margin-bottom:8px;">'
-            f'{T["upload_hint"]}</p>',
-            unsafe_allow_html=True,
-        )
-        st.markdown("---")
-        st.markdown(
-            f'<div style="font-weight:700;font-size:15px;color:{C["text"]};margin-bottom:8px;">'
+            f'<div style="font-weight:700;font-size:17px;color:{C["text"]};margin-bottom:8px;">'
             f'{T["ifc_upload_t"]}</div>',
             unsafe_allow_html=True,
         )
@@ -592,86 +657,11 @@ elif st.session_state.page == "upload":
             unsafe_allow_html=True,
         )
 
-        # Building-level params
-        bdata = st.session_state.get("building_data") or DEMO_DATA
-        bp = bdata.get("building_params", {})
-
-        with st.expander(T["bld_params_t"], expanded=True):
-            st.caption(T["bld_params_caption"])
-            _dv = st.session_state.get("data_version", 0)
-            bp1, bp2 = st.columns(2)
-            bw = bp1.number_input(T["p_ground_exit"], value=float(bp.get("ground_floor_exit_width_m", 2.4)), step=0.1, key=f"bp_bw_{_dv}")
-            fp = bp2.number_input(T["p_fire_pool"], value=float(bp.get("fire_pool_volume_m3", 160)), step=10.0, key=f"bp_fp_{_dv}")
-            tc = bp1.number_input(T["p_transformer"], value=float(bp.get("transformer_capacity_kw", 650)), step=50.0, key=f"bp_tc_{_dv}")
-            ep = bp2.number_input(T["p_emergency"], value=float(bp.get("emergency_power_duration_min", 60)), step=10.0, key=f"bp_ep_{_dv}")
-            fl = bp1.number_input(T["p_floors"], value=int(bp.get("total_floors", 3)), min_value=1, max_value=20, step=1, key=f"bp_fl_{_dv}")
-            bp_updated = {
-                "total_floors": int(fl), "ground_floor_exit_width_m": bw,
-                "fire_pool_volume_m3": fp, "transformer_capacity_kw": tc,
-                "emergency_power_duration_min": ep,
-                "occupancy_type": bp.get("occupancy_type", "office"),
-                "fire_elevator_count": bp.get("fire_elevator_count", 1),
-            }
-
-        # Per-floor room editing in tabs
-        floors = bdata.get("floors", [])
-        floor_tabs = st.tabs([_floor_label(f.get("floor_name", f.get("floor_id", f"F{i}"))) for i, f in enumerate(floors)])
-        updated_floors = []
-        for ti, (tab, floor) in enumerate(zip(floor_tabs, floors)):
-            with tab:
-                updated_rooms = []
-                for room in floor.get("rooms", []):
-                    rid = room["id"]
-                    st.markdown(
-                        f'<span style="font-weight:700;font-size:14px;">{room["name"]}</span> '
-                        f'<span style="color:{C["silver"]};font-size:12px;">({_room_type_label(room["type"])})</span>',
-                        unsafe_allow_html=True,
-                    )
-                    a1, a2, a3, a4 = st.columns(4)
-                    area = a1.number_input(T["p_area"], value=float(room.get("room_area_sqm", 0)), key=f"{rid}_a", step=5.0)
-                    exits = a2.number_input(T["p_exits"], value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=4)
-                    corr = a3.number_input(T["p_corridor"], value=float(room.get("corridor_length_m", 0)), key=f"{rid}_c", step=1.0)
-                    light = a4.checkbox(T["p_light"], value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
-                    b1, b2, b3, b4 = st.columns(4)
-                    water = b1.number_input(T["p_water"], value=float(room.get("dist_to_water_m", 5.0)), key=f"{rid}_w", step=0.1)
-                    circuit = b2.number_input(T["p_load"], value=float(room.get("circuit_load_a", 10)), key=f"{rid}_ld", step=1.0)
-                    outlet = b3.number_input(T["p_outlet"], value=float(room.get("outlet_spacing_m", 5.0)), key=f"{rid}_o", step=0.5)
-                    door = b4.number_input(T["p_door"], value=float(room.get("door_width_m") or 1.0), key=f"{rid}_d", step=0.1)
-                    updated_rooms.append({
-                        "id": rid, "name": room["name"], "type": room["type"],
-                        "room_area_sqm": area, "exit_count": exits, "corridor_length_m": corr,
-                        "door_width_m": door, "has_emergency_light": light,
-                        "dist_to_water_m": water, "circuit_load_a": circuit, "outlet_spacing_m": outlet,
-                    })
-                    st.markdown(f'<div style="height:8px;"></div>', unsafe_allow_html=True)
-
-                updated_zones = []
-                for zone in floor.get("fire_zones", []):
-                    za = st.number_input(
-                        f"{zone['name']} {T['p_fz_area']}",
-                        value=float(zone.get("fire_zone_area_sqm", 0)),
-                        key=f"{zone['id']}_z",
-                        step=50.0,
-                    )
-                    updated_zones.append({
-                        "id": zone["id"], "name": zone["name"],
-                        "fire_zone_area_sqm": za, "rooms": zone["rooms"],
-                    })
-
-                updated_floors.append({
-                    "floor_id": floor.get("floor_id", f"F{ti+1}"),
-                    "floor_name": floor.get("floor_name", f"Floor {ti+1}"),
-                    "rooms": updated_rooms,
-                    "fire_zones": updated_zones,
-                })
-
-        if st.button(T["save_btn"], width="stretch"):
-            st.session_state.building_data = {
-                "project_name": bdata.get("project_name", "Building"),
-                "building_params": bp_updated,
-                "floors": updated_floors,
-            }
-            st.success(T["save_ok"])
+        bdata = st.session_state.get("building_data")
+        if bdata is None:
+            st.info(T["need_upload"])
+        else:
+            _render_params_editor(bdata)
 
     if st.session_state.uploaded_image is not None:
         st.markdown("---")

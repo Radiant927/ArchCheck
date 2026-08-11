@@ -2,6 +2,7 @@
   "id": "sg",
   "name": "Singapore Standard (Fire Code 2023)",
   "short_name": "SG · FC23",
+  "category": "Singapore Standard",
   "flag": "🇸🇬",
   "language": "en",
   "civil_codes": "Singapore Fire Code 2023",
