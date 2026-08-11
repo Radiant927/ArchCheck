@@ -920,11 +920,6 @@ elif st.session_state.page == "results":
             <div style="font-size:13px;color:{C["silver"]};margin-top:4px;font-family:monospace;">{loc_label}: {iss.get("location","-")} | {ref_label}: {iss.get("code_ref","-")}</div>
             {evid}
             </div>''', unsafe_allow_html=True)
-            if show_floor and iss.get("floor_name") and iss.get("location"):
-                if st.button(f"📍 {iss.get('location','')}", key=f"loc_{i}_{iss.get('rule_id','')}", width="content"):
-                    st.session_state.selected_finding = {
-                        "floor": iss["floor_name"], "location": iss.get("location", ""),
-                        "title": iss["title"], "type": iss.get("type", "")}
 
     # ② Compliance Judge — unified findings (left) + floor plan (right)
     _fopt = {T["disc_civil"]: "civil", T["disc_eee"]: "eee", T["disc_bld"]: "building",
@@ -953,22 +948,12 @@ elif st.session_state.page == "results":
     with _rcol:
         floor_names = list(annotated_by_floor.keys())
         if floor_names:
-            _sel = st.session_state.get("selected_finding")
-            _def_idx = 0
-            if _sel and _sel.get("floor") in floor_names:
-                _def_idx = floor_names.index(_sel["floor"])
             _sidx = st.radio(
                 T["floor_sel"], options=range(len(floor_names)),
-                format_func=lambda i: floor_names[i], index=_def_idx, horizontal=True,
+                format_func=lambda i: floor_names[i], index=0, horizontal=True,
                 label_visibility="collapsed", key="rs_floor")
             _fn = floor_names[_sidx]
             st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["blue"]};margin-bottom:6px;">📐 {_fn}</div>', unsafe_allow_html=True)
-            if _sel and _sel.get("floor") == _fn:
-                st.markdown(
-                    f'<div style="padding:8px 12px;border-radius:4px;background:{C["red"]}12;'
-                    f'border-left:4px solid {C["red"]};margin-bottom:8px;font-size:13px;">'
-                    f'🔴 <b>{_sel.get("title","")}</b> @ {_sel.get("location","")}</div>',
-                    unsafe_allow_html=True)
             st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
             st.image(annotated_by_floor[_fn], width="stretch")
             st.markdown('</div>', unsafe_allow_html=True)
