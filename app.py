@@ -253,7 +253,7 @@ def _render_params_editor(bdata):
                 )
                 a1, a2, a3, a4 = st.columns(4)
                 area = a1.number_input(f"🟢 {T['p_area']}", value=float(room.get("room_area_sqm", 0)), key=f"{rid}_a", step=5.0)
-                exits = a2.number_input(f"🟢 {T['p_exits']}", value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=4)
+                exits = a2.number_input(f"🟢 {T['p_exits']}", value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=50)
                 corr = a3.number_input(f"🟢 {T['p_corridor']}", value=float(room.get("corridor_length_m", 0)), key=f"{rid}_c", step=1.0)
                 light = a4.checkbox(f"🟠 {T['p_light']}", value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
                 b1, b2, b3, b4 = st.columns(4)
