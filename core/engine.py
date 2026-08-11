@@ -3,6 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 from core.config import DATA
 from core.i18n import _I18N, LANG, set_language, _floor_label
+from kb import steward
 
 HERE = Path(__file__).resolve().parent.parent
 
@@ -64,7 +65,6 @@ def run_rules(rules, item, prefix, floor_id=None, floor_name=None):
         if field not in item:
             continue
         value = item[field]
-        threshold = rule["threshold"]
         if value is None:
             room_name = item.get("name", item.get("id", "?"))
             violations.append({
@@ -77,6 +77,7 @@ def run_rules(rules, item, prefix, floor_id=None, floor_name=None):
                 "floor_name": floor_name,
             })
             continue
+        threshold = steward.resolve_threshold(rule, item)
         cond_value = None
         cond_threshold = None
         if "condition_field" in rule:
