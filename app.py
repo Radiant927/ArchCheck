@@ -918,8 +918,8 @@ elif st.session_state.page == "results":
             <div style="font-size:13px;color:{C["silver"]};margin-top:4px;font-family:monospace;">{loc_label}: {iss.get("location","-")} | {ref_label}: {iss.get("code_ref","-")}</div>
             {evid}
             </div>''', unsafe_allow_html=True)
-            if show_floor and iss.get("floor_name"):
-                if st.button("📍", key=f"loc_{i}_{iss.get('rule_id','')}", help=iss.get("location", ""), width="content"):
+            if show_floor and iss.get("floor_name") and iss.get("location"):
+                if st.button(f"📍 {iss.get('location','')}", key=f"loc_{i}_{iss.get('rule_id','')}", width="content"):
                     st.session_state.selected_finding = {
                         "floor": iss["floor_name"], "location": iss.get("location", ""),
                         "title": iss["title"], "type": iss.get("type", "")}

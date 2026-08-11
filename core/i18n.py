@@ -550,9 +550,14 @@ def _room_type_label(rtype):
     return mapping.get(rtype, rtype)
 
 def _floor_label(name):
-    """Localize demo floor names (一层/二层/三层) for the English UI."""
+    """Localize demo (一层/二层/三层) and common BIM storey names (German EG/DG)."""
     if LANG == "en":
-        mapping = {"一层": "Floor 1", "二层": "Floor 2", "三层": "Floor 3"}
-        if name in mapping:
-            return mapping[name]
-    return name
+        mapping = {"一层": "Floor 1", "二层": "Floor 2", "三层": "Floor 3",
+                   "Erdgeschoss": "Ground Floor", "Dachgeschoss": "Attic",
+                   "Obergeschoss": "Upper Floor", "Untergeschoss": "Basement",
+                   "1. Obergeschoss": "Floor 2", "2. Obergeschoss": "Floor 3"}
+    else:
+        mapping = {"Erdgeschoss": "一层", "Dachgeschoss": "阁楼",
+                   "Obergeschoss": "上层", "Untergeschoss": "地下室",
+                   "1. Obergeschoss": "二层", "2. Obergeschoss": "三层"}
+    return mapping.get(name, name)
