@@ -3,7 +3,9 @@ ArchCheck — Building Plan Automated Review Platform
 Multi-floor support · Standard switching (CN GB / SG FC23)
 """
 import io
+import json
 import time
+from pathlib import Path
 
 import streamlit as st
 from PIL import Image
@@ -258,10 +260,10 @@ with st.sidebar:
     st.caption(f'{T["active_std"]}: {STD_META.get("flag","")} {STD_META.get("civil_codes","")}')
 
     st.markdown("---")
-    page_labels = {"upload": T["nav_upload"], "results": T["nav_results"], "architecture": T["nav_arch"]}
+    page_labels = {"upload": T["nav_upload"], "results": T["nav_results"], "architecture": T["nav_arch"], "kb": T["nav_kb"]}
     nav = st.radio(
         "Navigation",
-        options=["upload", "results", "architecture"],
+        options=["upload", "results", "architecture", "kb"],
         format_func=lambda x: page_labels[x],
         key="nav_radio",
         label_visibility="collapsed",
@@ -427,19 +429,23 @@ elif st.session_state.page == "upload":
     st.markdown(f"""<div style="display:flex;gap:28px;margin:24px 0 8px 0;flex-wrap:wrap;">
     <div style="display:flex;align-items:center;gap:10px;">
     <div style="width:14px;height:14px;background:{C["blue"]};border-radius:2px;"></div>
-    <span style="font-size:15px;font-weight:600;">{T["agent_civil"]}</span>
+    <span style="font-size:15px;font-weight:600;">{T["agent_reader"]}</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
     <div style="width:14px;height:14px;background:{C["orange"]};border-radius:2px;"></div>
-    <span style="font-size:15px;font-weight:600;">{T["agent_eee"]}</span>
+    <span style="font-size:15px;font-weight:600;">{T["agent_judge"]}</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
     <div style="width:14px;height:14px;background:{C["purple"]};border-radius:2px;"></div>
-    <span style="font-size:15px;font-weight:600;">{T["agent_bld"]}</span>
+    <span style="font-size:15px;font-weight:600;">{T["agent_kb"]}</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
     <div style="width:14px;height:14px;background:{C["red"]};border-radius:2px;"></div>
-    <span style="font-size:15px;font-weight:600;">{T["agent_coord"]}</span>
+    <span style="font-size:15px;font-weight:600;">{T["agent_reviewer"]}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+    <div style="width:14px;height:14px;background:{C["green"]};border-radius:2px;"></div>
+    <span style="font-size:15px;font-weight:600;">{T["agent_reasoner"]}</span>
     </div>
     </div>""", unsafe_allow_html=True)
 
@@ -447,14 +453,18 @@ elif st.session_state.page == "upload":
 
     f1, f2, f3, f4 = st.columns(4)
     features = [
-        ("📐", C["blue"], T["feat1_t"],
-         f"Evacuation distance · Fire zones\nEmergency exits · Door width\n{STD_META.get('civil_codes','')}" if LANG == "en" else
-         f"疏散距离 · 防火分区\n安全出口 · 疏散门宽\n{STD_META.get('civil_codes','')}"),
-        ("⚡", C["orange"], T["feat2_t"],
-         f"Emergency lighting · Water clearance\nCircuit load · Outlet spacing\n{STD_META.get('eee_codes','')}" if LANG == "en" else
-         f"应急照明 · 水源间距\n回路负荷 · 插座间距\n{STD_META.get('eee_codes','')}"),
-        ("🏢", C["purple"], T["feat3_t"], T["feat3_d"]),
-        ("🔗", C["red"], T["feat4_t"], T["feat4_d"]),
+        ("🏗️", C["blue"], T["feat1_t"],
+         f"IFC → 楼层/房间/构件\n模型健康度 QA\n门宽/疏散距离/截面" if LANG == "en" else
+         f"IFC → 楼层/房间/构件\n模型健康度 QA\n门宽/疏散距离/截面"),
+        ("⚖️", C["orange"], T["feat2_t"],
+         f"消防/电气/结构/无障碍\n值 vs 阈值 · 动态阈值\n跨楼层聚合 · 冲突" if LANG == "en" else
+         f"消防/电气/结构/无障碍\n值 vs 阈值 · 动态阈值\n跨楼层聚合 · 冲突"),
+        ("🔍", C["red"], T["feat3_t"],
+         f"RAG 检索规范原文复核\n已复核 ✅ / 待人工复核 ⚠️\n证据片段展示" if LANG == "en" else
+         f"RAG 检索规范原文复核\n已复核 ✅ / 待人工复核 ⚠️\n证据片段展示"),
+        ("🌐", C["purple"], T["feat4_t"],
+         f"CN GB ↔ SG FC23 一键切换\n规则库配置化扩展\n双语界面" if LANG == "en" else
+         f"CN GB ↔ SG FC23 一键切换\n规则库配置化扩展\n双语界面"),
     ]
     for col, (icon, color, title, desc) in zip([f1, f2, f3, f4], features):
         with col:
@@ -479,19 +489,6 @@ elif st.session_state.page == "upload":
             f'{T["upload_hint"]}</p>',
             unsafe_allow_html=True,
         )
-        uf = st.file_uploader(
-            T["upload_drag"],
-            type=["png", "jpg", "jpeg", "pdf"],
-            key="fu",
-            label_visibility="collapsed",
-        )
-        if uf is not None:
-            img = Image.open(uf)
-            st.session_state.uploaded_image = img
-            st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-            st.image(img)
-            st.markdown('</div>', unsafe_allow_html=True)
-
         st.markdown("---")
         st.markdown(
             f'<div style="font-weight:700;font-size:15px;color:{C["text"]};margin-bottom:8px;">'
@@ -528,6 +525,7 @@ elif st.session_state.page == "upload":
                 # rooms come from the IFC when present; otherwise empty (no fabrication)
                 bdata = build_review_data(struct)
                 st.session_state.building_data = bdata
+                st.session_state.data_version = st.session_state.get("data_version", 0) + 1
                 if struct["total_rooms"] == 0:
                     st.warning(T["ifc_no_rooms"])
                 first_rooms = bdata["floors"][0]["rooms"] if bdata.get("floors") else []
@@ -577,6 +575,7 @@ elif st.session_state.page == "upload":
                 else:
                     st.session_state.uploaded_image = generate_sample_image(first_fname, variant=0)
             st.session_state.building_data = DEMO_DATA
+            st.session_state.data_version = st.session_state.get("data_version", 0) + 1
             st.session_state.review_loading = True
             st.rerun()
 
@@ -598,12 +597,13 @@ elif st.session_state.page == "upload":
 
         with st.expander(T["bld_params_t"], expanded=True):
             st.caption(T["bld_params_caption"])
+            _dv = st.session_state.get("data_version", 0)
             bp1, bp2 = st.columns(2)
-            bw = bp1.number_input(T["p_ground_exit"], value=float(bp.get("ground_floor_exit_width_m", 2.4)), step=0.1, key="bp_bw")
-            fp = bp2.number_input(T["p_fire_pool"], value=float(bp.get("fire_pool_volume_m3", 160)), step=10.0, key="bp_fp")
-            tc = bp1.number_input(T["p_transformer"], value=float(bp.get("transformer_capacity_kw", 650)), step=50.0, key="bp_tc")
-            ep = bp2.number_input(T["p_emergency"], value=float(bp.get("emergency_power_duration_min", 60)), step=10.0, key="bp_ep")
-            fl = bp1.number_input(T["p_floors"], value=int(bp.get("total_floors", 3)), min_value=1, max_value=20, step=1, key="bp_fl")
+            bw = bp1.number_input(T["p_ground_exit"], value=float(bp.get("ground_floor_exit_width_m", 2.4)), step=0.1, key=f"bp_bw_{_dv}")
+            fp = bp2.number_input(T["p_fire_pool"], value=float(bp.get("fire_pool_volume_m3", 160)), step=10.0, key=f"bp_fp_{_dv}")
+            tc = bp1.number_input(T["p_transformer"], value=float(bp.get("transformer_capacity_kw", 650)), step=50.0, key=f"bp_tc_{_dv}")
+            ep = bp2.number_input(T["p_emergency"], value=float(bp.get("emergency_power_duration_min", 60)), step=10.0, key=f"bp_ep_{_dv}")
+            fl = bp1.number_input(T["p_floors"], value=int(bp.get("total_floors", 3)), min_value=1, max_value=20, step=1, key=f"bp_fl_{_dv}")
             bp_updated = {
                 "total_floors": int(fl), "ground_floor_exit_width_m": bw,
                 "fire_pool_volume_m3": fp, "transformer_capacity_kw": tc,
@@ -1026,6 +1026,59 @@ elif st.session_state.page == "results":
             st.session_state.conflicts = []
             st.session_state.all_issues = []
             st.rerun()
+
+# ---- ARCHITECTURE PAGE ----
+# ---- REGULATION KNOWLEDGE BASE ----
+elif st.session_state.page == "kb":
+    st.markdown(f'<div class="aicher-label" style="margin-bottom:8px;">{T["kb_title"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:15px;color:{C["muted"]};margin-bottom:20px;max-width:860px;">{T["kb_sub"]}</div>', unsafe_allow_html=True)
+    _manifest = json.loads((Path(__file__).resolve().parent / "scripts" / "rag_kb" / "kb_manifest.json").read_text(encoding="utf-8"))
+    _kb_root = Path(__file__).resolve().parent / _manifest["kb_root"]
+    _cats = _manifest["categories"]
+    for _ck in ("SG_Free", "SG_Paid_Index", "CN_Mandatory", "CN_Reference"):
+        _cat = _cats.get(_ck)
+        if not _cat:
+            continue
+        st.markdown(f'<div style="font-size:21px;font-weight:700;color:{C["text"]};margin:26px 0 6px;">{_cat["label"]}</div>', unsafe_allow_html=True)
+        for _sk, _sub in _cat["subdirs"].items():
+            st.markdown(f'<div style="font-size:15px;font-weight:600;color:{C["muted"]};margin:14px 0 4px;">{_sub["label"]}</div>', unsafe_allow_html=True)
+            for _doc in _sub["documents"]:
+                _acc = _doc.get("access", "")
+                _badge = T["kb_free"] if _acc == "free" else T["kb_paid"]
+                _bcol = C["green"] if _acc == "free" else C["orange"]
+                _fn = _doc.get("file", "")
+                _full = _kb_root / _ck / _sk / _fn if _fn else None
+                _title = _doc.get("name_zh") or _doc.get("name", "")
+                _std = _doc.get("standard_no", "")
+                with st.expander(f"{_title} — {_std}"):
+                    st.markdown(f'<span style="font-size:12px;color:{_bcol};font-weight:600;padding:2px 8px;border-radius:2px;background:{_bcol}18;">{_badge}</span>', unsafe_allow_html=True)
+                    for _k, _v in (("Authority", _doc.get("authority")), ("Year", _doc.get("year")),
+                                   ("Status", _doc.get("status")), ("Scope", _doc.get("scope")),
+                                   ("Source", _doc.get("source")), ("Notes", _doc.get("notes"))):
+                        if _v:
+                            st.caption(f"**{_k}:** {_v}")
+                    if _full and _full.exists():
+                        _txt = None
+                        if _full.suffix.lower() == ".txt":
+                            _txt = _full.read_text(encoding="utf-8", errors="ignore")
+                        elif _full.suffix.lower() == ".pdf":
+                            _sib = _full.with_suffix(".txt")
+                            if _sib.exists():
+                                _txt = _sib.read_text(encoding="utf-8", errors="ignore")
+                            else:
+                                try:
+                                    from pypdf import PdfReader
+                                    _rd = PdfReader(str(_full))
+                                    _txt = "\n".join((p.extract_text() or "") for p in _rd.pages[:3])
+                                except Exception:
+                                    _txt = None
+                        if _txt:
+                            st.markdown(f"**{T['kb_content']}**")
+                            st.code(_txt[:2000], language="")
+                        else:
+                            st.caption(f"{_full.name} — PDF")
+                    else:
+                        st.caption(T["kb_no_file"])
 
 # ---- ARCHITECTURE PAGE ----
 elif st.session_state.page == "architecture":
