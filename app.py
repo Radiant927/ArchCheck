@@ -526,6 +526,7 @@ elif st.session_state.page == "upload":
                 bdata = build_review_data(struct)
                 st.session_state.building_data = bdata
                 st.session_state.data_version = st.session_state.get("data_version", 0) + 1
+                st.session_state.model_qa = struct.get("qa") or {}
                 if struct["total_rooms"] == 0:
                     st.warning(T["ifc_no_rooms"])
                 first_rooms = bdata["floors"][0]["rooms"] if bdata.get("floors") else []
@@ -766,6 +767,25 @@ elif st.session_state.page == "results":
     if bdata.get("source") == "ifc" and sum(len(f.get("rooms", [])) for f in floors) == 0:
         st.warning(T["ifc_no_rooms"])
 
+    # ① BIM Reader — model usability QA
+    _qa = st.session_state.get("model_qa") or {}
+    if _qa:
+        st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["blue"]};margin:22px 0 10px;">① {T["agent_reader"]} · {T["model_health"]}</div>', unsafe_allow_html=True)
+        _q1, _q2 = st.columns([1, 3])
+        _q1.metric(T["qa_score"], f"{_qa.get('score', 0)}/100")
+        _q2.progress(max(0, min(100, _qa.get('score', 0))) / 100)
+        for _ch in _qa.get("checks", []):
+            _lv = _ch["level"]; _msg = _ch["message"]
+            if _lv == "error":
+                st.error(_msg)
+            elif _lv == "warn":
+                st.warning(_msg)
+            else:
+                st.info(_msg)
+
+    # ② Compliance Judge — deterministic review
+    st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["orange"]};margin:22px 0 10px;">② {T["agent_judge"]}</div>', unsafe_allow_html=True)
+
     high = sum(1 for i in all_issues if i.get("severity") == "High")
 
     s1, s2, s3, s4, s5, s6 = st.columns(6)
@@ -819,7 +839,8 @@ elif st.session_state.page == "results":
             if not added_in_other and not removed_in_other:
                 st.success(T["diff_identical"].format(cur=cur_name, oth=oth_name))
 
-    # ---- AI review report (LLM-generated) ----
+    # ---- ④ Reasoner — LLM narrative / coordination ----
+    st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["green"]};margin:22px 0 10px;">④ {T["agent_reasoner"]}</div>', unsafe_allow_html=True)
     ai_exp = st.expander(f"🤖 {T['ai_report_t']}")
     with ai_exp:
         if not llm.available():
@@ -982,6 +1003,29 @@ elif st.session_state.page == "results":
             render_issue_cards(structural_r, "structural")
         else:
             st.success(T["no_issue"])
+
+    # ⑤ Independent Reviewer — verification summary
+    _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
+    _n_man = sum(1 for i in all_issues if i.get("review_status") == "manual")
+    st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["red"]};margin:22px 0 10px;">⑤ {T["agent_reviewer"]}</div>', unsafe_allow_html=True)
+    if _n_ver or _n_man:
+        st.markdown(
+            f'<div style="font-size:14px;color:{C["muted"]};margin-bottom:12px;">'
+            f'<span style="color:{C["green"]};font-weight:600;">✅ {T["review_verified"]}: {_n_ver}</span>'
+            f' &nbsp;·&nbsp; '
+            f'<span style="color:{C["orange"]};font-weight:600;">⚠️ {T["review_manual"]}: {_n_man}</span>'
+            f' &nbsp;·&nbsp; <span style="color:{C["silver"]};">{T["kb_sub"]}</span></div>',
+            unsafe_allow_html=True,
+        )
+        for iss in all_issues:
+            if iss.get("review_status") == "verified" and iss.get("review_evidence"):
+                st.markdown(
+                    f'<div style="font-size:13px;color:{C["green"]};padding:3px 0 3px 16px;font-family:monospace;">'
+                    f'🔍 {iss["title"]} @ {iss.get("location","")} — {iss["review_evidence"][:120]}</div>',
+                    unsafe_allow_html=True,
+                )
+    else:
+        st.caption(T["kb_no_file"])
 
     # Building-level correction suggestions
     if building_r:
