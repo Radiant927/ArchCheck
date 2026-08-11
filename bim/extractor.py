@@ -111,7 +111,8 @@ def _structural_sections(els, settings, scale, col_cap=200, other_cap=30):
                 beam_sec.append((round(d[2], 3), round(min(d[:2]), 3)))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
                                  "element_type": "beam", "depth_m": round(d[2], 3),
-                                 "width_m": round(min(d[:2]), 3)})
+                                 "width_m": round(min(d[:2]), 3),
+                                 "span_m": round(max(d[0], d[1]), 3)})
         elif e.is_a("IfcSlab"):
             if nslab >= other_cap:
                 continue
@@ -120,7 +121,8 @@ def _structural_sections(els, settings, scale, col_cap=200, other_cap=30):
             if d and 0.02 < d[2] < 1.0:
                 slab_th.append(round(d[2], 3))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
-                                 "element_type": "slab", "thickness_m": round(d[2], 3)})
+                                 "element_type": "slab", "thickness_m": round(d[2], 3),
+                                 "span_m": round(max(d[0], d[1]), 3)})
     return elements, sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th))
 
 

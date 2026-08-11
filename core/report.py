@@ -37,12 +37,17 @@ def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, str
             floor_info = ""
             if iss.get("floor_name"):
                 floor_info = f' · <span style="color:{C["silver"]};font-size:12px;">{iss["floor_name"]}</span>'
+            evid = ""
+            if iss.get("review_status") == "verified" and iss.get("review_evidence"):
+                evid = (f'<div class="meta" style="color:{C["green"]};">🔍 {t["review_evid"]}: '
+                        f'{iss["review_evidence"][:140]}</div>')
             out += (
                 f'<div class="card {cls}">'
                 f'<div class="title">{i}. {iss["title"]}'
                 f'<span class="sev sev-{sc}">{sv_label}</span>{rv}{floor_info}</div>'
                 f'<div class="desc">{iss.get("description","")}</div>'
                 f'<div class="meta">{t["report_loc"]}: {iss.get("location","-")} | {t["report_ref"]}: {iss.get("code_ref","-")}</div>'
+                f'{evid}'
                 f'</div>'
             )
         return out

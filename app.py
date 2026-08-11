@@ -946,12 +946,17 @@ elif st.session_state.page == "results":
                 floor_tag = f'<span class="floor-tag">{_floor_label(iss["floor_name"])}</span>'
             loc_label = T["loc"]
             ref_label = T["ref"]
+            evid = ""
+            if iss.get("review_status") == "verified" and iss.get("review_evidence"):
+                evid = (f'<div style="font-size:12px;color:{C["green"]};margin-top:4px;'
+                        f'font-family:monospace;">🔍 {T["review_evid"]}: {iss["review_evidence"][:150]}</div>')
             st.markdown(f'''<div class="issue-card {css_class}">
             <div style="font-weight:700;font-size:15px;">{i}. {iss["title"]}
             <span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:600;background:{sev_color}18;color:{sev_color};">{sev}</span>
             {review_badge}{floor_tag}</div>
             <div style="font-size:14px;color:{C["muted"]};margin-top:4px;">{iss.get("description","")}</div>
             <div style="font-size:13px;color:{C["silver"]};margin-top:4px;font-family:monospace;">{loc_label}: {iss.get("location","-")} | {ref_label}: {iss.get("code_ref","-")}</div>
+            {evid}
             </div>''', unsafe_allow_html=True)
 
     with t1:
