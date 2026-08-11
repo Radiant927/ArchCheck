@@ -22,10 +22,13 @@ except ImportError:
     IFC_AVAILABLE = False
 
 DOOR_WIDTH_RE = re.compile(r"(\d{3,4})\s*[xX×]\s*(\d{3,4})mm")
-
+DOOR_WIDTH_IN_RE = re.compile(r'(\d{1,3}(?:\.\d+)?)\s*["″]\s*[xX×]\s*(\d{1,3}(?:\.\d+)?)\s*["″]')
 # Meters per IFC SI length-unit prefix.
 _PREFIX_SCALE = {"MILLI": 0.001, "CENTI": 0.01, "DECI": 0.1,
                  "DECA": 10.0, "HECTO": 100.0, "KILO": 1000.0}
+# Door centroid-to-room-polygon distance (m) used to associate a door with the
+# rooms it serves when the model has no IfcRelSpaceBoundary data.
+DOOR_ASSOC_DIST_M = 0.5
 
 
 def available():
@@ -57,19 +60,60 @@ def _extrude_profile(item):
     return None
 
 
-def _door_width_m(door, scale):
-    """Door width in metres: parse from type name, fall back to geometry."""
-    nm = door.Name or ""
-    mm = DOOR_WIDTH_RE.search(nm)
-    if mm:
-        return int(mm.group(1)) / 1000.0
-    if door.Representation:
-        for rep in door.Representation.Representations:
-            for it in (rep.Items or []):
-                prof = _extrude_profile(it)
-                if prof:
-                    return prof.XDim * scale
-    return None
+def _door_shape_info(door, scale):
+    """(width_m, centroid_xy) of a door from its tessellated geometry bbox.
+
+    The larger horizontal extent of the world-space bounding box is the door
+    width; the centroid is used for door->room association. Returns (None, None)
+    on failure so callers can fall back to attribute/name sources.
+    """
+    try:
+        st = ifcgeom.settings()
+        st.set(st.USE_WORLD_COORDS, True)
+        shape = ifcgeom.create_shape(st, door)
+        v = shape.geometry.verts
+        if len(v) < 6:
+            return None, None
+        xs = v[0::3]
+        ys = v[1::3]
+        w = max(max(xs) - min(xs), max(ys) - min(ys)) * scale
+        if not (0.1 <= w <= 5.0):
+            w = None
+        return w, (sum(xs) / len(xs), sum(ys) / len(ys))
+    except Exception:
+        return None, None
+
+
+def _door_width_m(door, scale, geom_width=None):
+    """Door width in metres, attribute-first.
+
+    Priority: Pset_DoorCommon.OverallWidth -> type-name dimensions (mm, then
+    inches) -> geometry bbox. Returns None when unresolvable so the review can
+    report "data missing" instead of inventing a value.
+    """
+    w = None
+    for rel in door.IsDefinedBy or []:
+        if rel.is_a("IfcRelDefinesByProperties"):
+            ps = rel.RelatingPropertyDefinition
+            if ps.is_a("IfcPropertySet") and ps.Name == "Pset_DoorCommon":
+                for p in ps.HasProperties:
+                    if p.Name == "OverallWidth" and p.NominalValue:
+                        try:
+                            w = float(p.NominalValue.wrappedValue) * scale
+                        except (TypeError, ValueError):
+                            pass
+    if w is None:
+        nm = door.Name or ""
+        mm = DOOR_WIDTH_RE.search(nm)
+        if mm:
+            w = int(mm.group(1)) / 1000.0
+        else:
+            mi = DOOR_WIDTH_IN_RE.search(nm)
+            if mi:
+                w = float(mi.group(1)) * 0.0254
+    if w is None:
+        w = geom_width
+    return round(w, 3) if w is not None else None
 
 
 def _storey_footprint(m, storey, scale):
@@ -92,20 +136,18 @@ def _storey_footprint(m, storey, scale):
     return round(best, 1)
 
 
-def _space_area_m2(space, scale, settings=None):
-    """Room area (m²) from the tessellated geometry's XY projection (convex hull).
+def _space_hull(space, settings):
+    """(convex_hull_xy, centroid_xy) of a space's tessellated XY projection.
 
-    Works for both extruded and Brep space geometry; units follow the model.
+    Coordinates are in model units. Used both for area (convex-hull approx,
+    overestimates concave spaces) and for door->room association.
     """
     try:
-        if settings is None:
-            settings = ifcgeom.settings()
-            settings.set(settings.USE_WORLD_COORDS, True)
         shape = ifcgeom.create_shape(settings, space)
         v = shape.geometry.verts
         pts = sorted(set((v[i], v[i + 1]) for i in range(0, len(v), 3)))
         if len(pts) < 3:
-            return 0.0
+            return None, None
         def cross(o, a, b):
             return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
         lo = []
@@ -119,14 +161,92 @@ def _space_area_m2(space, scale, settings=None):
                 up.pop()
             up.append(p)
         hull = lo[:-1] + up[:-1]
-        area = 0.0
-        for i in range(len(hull)):
-            x1, y1 = hull[i]
-            x2, y2 = hull[(i + 1) % len(hull)]
-            area += x1 * y2 - x2 * y1
-        return abs(area) / 2.0 * (scale * scale)
+        return hull, (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
     except Exception:
+        return None, None
+
+
+def _hull_area(hull, scale):
+    """Area (m²) of a convex hull polygon, scaled from model units to metres."""
+    area = 0.0
+    for i in range(len(hull)):
+        x1, y1 = hull[i]
+        x2, y2 = hull[(i + 1) % len(hull)]
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2.0 * (scale * scale)
+
+
+def _space_area_m2(space, scale, settings=None):
+    if settings is None:
+        settings = ifcgeom.settings()
+        settings.set(settings.USE_WORLD_COORDS, True)
+    hull, _ = _space_hull(space, settings)
+    return _hull_area(hull, scale) if hull else 0.0
+
+
+def _point_in_poly(p, poly):
+    """Ray-casting point-in-polygon test (XY)."""
+    x, y = p
+    inside = False
+    n = len(poly)
+    j = n - 1
+    for i in range(n):
+        xi, yi = poly[i]
+        xj, yj = poly[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _dist_to_poly(p, poly):
+    """0 if inside the polygon, else min distance (model units) to its edges."""
+    if _point_in_poly(p, poly):
         return 0.0
+    px, py = p
+    best = float("inf")
+    n = len(poly)
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        dx, dy = x2 - x1, y2 - y1
+        if dx == 0 and dy == 0:
+            d = ((px - x1) ** 2 + (py - y1) ** 2) ** 0.5
+        else:
+            t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)))
+            d = ((px - (x1 + t * dx)) ** 2 + (py - (y1 + t * dy)) ** 2) ** 0.5
+        best = min(best, d)
+    return best
+
+
+def _associate_doors(space_geom, door_geom, scale, spaces, space_storey, door_storey):
+    """Map each space to the doors that serve it.
+
+    Uses IfcRelSpaceBoundary when the model has them (exact), then complements
+    with a geometric proximity test (door centroid within DOOR_ASSOC_DIST_M of a
+    room's footprint) for models without boundaries (e.g. Snowdon). Doors are
+    only associated to rooms on the same storey. Returns {space_gid: set(door_gid)}.
+    """
+    assoc = {}
+    for s in spaces:
+        for b in s.BoundedBy or []:
+            el = b.RelatedBuildingElement
+            if el and el.is_a("IfcDoor"):
+                assoc.setdefault(s.GlobalId, set()).add(el.GlobalId)
+    threshold = DOOR_ASSOC_DIST_M / scale
+    for gid, (hull, _) in space_geom.items():
+        if not hull:
+            continue
+        sg = space_storey.get(gid)
+        for dg, (_, centroid) in door_geom.items():
+            if not centroid:
+                continue
+            ds = door_storey.get(dg)
+            if ds is not None and sg is not None and ds != sg:
+                continue
+            if _dist_to_poly(centroid, hull) <= threshold:
+                assoc.setdefault(gid, set()).add(dg)
+    return assoc
 
 
 def _classify_room_type(name):
@@ -145,17 +265,30 @@ def _classify_room_type(name):
     return "Office"
 
 
-def _space_to_room(space, area, ref=""):
-    """Build a review-engine room dict; non-BIM params get sensible defaults."""
+def _space_to_room(space, area, ref="", door_widths=None):
+    """Build a review-engine room dict from a real IfcSpace.
+
+    exit_count and door_width_m come from the real doors associated with the
+    space. door_widths=None means the model has no usable door data -> both are
+    None so the engine reports "data missing"; door_widths=[] is a real room
+    with no doors (exit_count 0).
+    """
     name = space.Name or "?"
     rtype = _classify_room_type(f"{ref} {name}")
+    if door_widths is None:
+        exit_count = None
+        door_width = None
+    else:
+        exit_count = len(door_widths)
+        real = [w for w in door_widths if w is not None]
+        door_width = max(real) if real else None
     return {
         "id": space.GlobalId or name,
         "name": name,
         "type": rtype,
         "room_area_sqm": round(area, 1),
-        "exit_count": 2 if area > 50 else 1,
-        "door_width_m": 0.9,
+        "exit_count": exit_count,
+        "door_width_m": door_width,
         "has_emergency_light": rtype not in ("Stairwell", "Corridor", "Vestibule"),
         "dist_to_water_m": 5.0,
         "circuit_load_a": 10,
@@ -221,24 +354,55 @@ def parse_ifc(path, max_floors=None, max_rooms_per_floor=None):
                          reverse=True)[:max_floors]
         storeys.sort(key=lambda s: s.Elevation or 0.0)
 
+    # Only compute geometry/doors for storeys and spaces that appear in output.
+    kept_storey_gids = {st.GlobalId for st in storeys}
+
+    space_geom = {}
+    space_storey = {}
+    kept_spaces = []
+    for sg, slist in storey_spaces.items():
+        if sg not in kept_storey_gids:
+            continue
+        for sp in slist:
+            hull, _ = _space_hull(sp, geom_settings)
+            space_geom[sp.GlobalId] = (hull, _hull_area(hull, scale) if hull else 0.0)
+            space_storey[sp.GlobalId] = sg
+            kept_spaces.append(sp)
+
+    door_storey = {e.GlobalId: sg for sg, els in by_storey.items() for e in els if e.is_a("IfcDoor")}
+    doors_kept = [d for d in m.by_type("IfcDoor")
+                  if door_storey.get(d.GlobalId) in kept_storey_gids
+                  or d.GlobalId not in door_storey]
+    door_geom = {d.GlobalId: _door_shape_info(d, scale) for d in doors_kept}
+    door_meta = {d.GlobalId: _door_width_m(d, scale, door_geom[d.GlobalId][0])
+                 for d in doors_kept}
+
+    door_room = _associate_doors(space_geom, door_geom, scale, kept_spaces,
+                                 space_storey, door_storey)
+
     floors = []
     for storey in storeys:
         els = by_storey.get(storey.GlobalId, [])
         types = {}
-        door_widths = []
+        storey_door_widths = []
         for e in els:
             types[e.is_a()] = types.get(e.is_a(), 0) + 1
             if e.is_a("IfcDoor"):
-                w = _door_width_m(e, scale)
+                w = door_meta.get(e.GlobalId)
                 if w:
-                    door_widths.append(round(w, 3))
+                    storey_door_widths.append(w)
 
         spaces = storey_spaces.get(storey.GlobalId, [])
-        sized = [(s, _space_area_m2(s, scale, geom_settings)) for s in spaces]
-        sized.sort(key=lambda x: -x[1])
+        sized = sorted(spaces, key=lambda s: -(space_geom.get(s.GlobalId, (None, 0.0))[1]))
         if max_rooms_per_floor:
             sized = sized[:max_rooms_per_floor]
-        rooms = [_space_to_room(s, a, ref_map.get(s.GlobalId, "")) for s, a in sized]
+        rooms = []
+        for s in sized:
+            area = space_geom.get(s.GlobalId, (None, 0.0))[1]
+            widths = None
+            if door_meta:  # model has doors: report real per-room door data
+                widths = [door_meta[g] for g in door_room.get(s.GlobalId, set()) if g in door_meta]
+            rooms.append(_space_to_room(s, area, ref_map.get(s.GlobalId, ""), widths))
 
         floors.append({
             "name": storey.Name or "?",
@@ -252,8 +416,8 @@ def parse_ifc(path, max_floors=None, max_rooms_per_floor=None):
                 "beams": types.get("IfcBeam", 0),
                 "slabs": types.get("IfcSlab", 0) + types.get("IfcSlabStandardCase", 0),
                 "stairs": types.get("IfcStair", 0),
-                "door_widths_m": sorted(set(door_widths)),
-                "door_count": len(door_widths),
+                "door_widths_m": sorted(set(storey_door_widths)),
+                "door_count": len(storey_door_widths),
             },
             "rooms": rooms,
         })

@@ -901,7 +901,7 @@ elif st.session_state.page == "results":
             return
         for i, iss in enumerate(issues, 1):
             sev = iss.get("severity", "Medium")
-            sev_color = {"High": C["red"], "Medium": C["orange"], "Low": C["silver"]}.get(sev, C["silver"])
+            sev_color = {"High": C["red"], "Medium": C["orange"], "Low": C["silver"], "Missing": C["silver"]}.get(sev, C["silver"])
             floor_tag = ""
             if show_floor and iss.get("floor_name"):
                 floor_tag = f'<span class="floor-tag">{_floor_label(iss["floor_name"])}</span>'

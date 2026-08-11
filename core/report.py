@@ -8,7 +8,8 @@ def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, con
     t = _I18N[LANG]
     sev_map = {"High": ("高", "high") if LANG == "zh" else ("High", "high"),
                "Medium": ("中", "mid") if LANG == "zh" else ("Medium", "mid"),
-               "Low": ("低", "low") if LANG == "zh" else ("Low", "low")}
+               "Low": ("低", "low") if LANG == "zh" else ("Low", "low"),
+               "Missing": ("数据缺失", "mid") if LANG == "zh" else ("Data Missing", "mid")}
     priority_label = "优先处理" if LANG == "zh" else "PRIORITY"
     html_lang = "zh" if LANG == "zh" else "en"
 

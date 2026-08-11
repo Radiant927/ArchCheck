@@ -62,6 +62,18 @@ def run_rules(rules, item, prefix, floor_id=None, floor_name=None):
             continue
         value = item[field]
         threshold = rule["threshold"]
+        if value is None:
+            room_name = item.get("name", item.get("id", "?"))
+            violations.append({
+                "title": rule["name"],
+                "description": _I18N[LANG]["rule_data_missing"].format(field=field),
+                "location": room_name, "severity": "Missing",
+                "code_ref": rule["code_ref"], "type": prefix,
+                "rule_id": rule["id"],
+                "floor_id": floor_id,
+                "floor_name": floor_name,
+            })
+            continue
         cond_value = None
         cond_threshold = None
         if "condition_field" in rule:
