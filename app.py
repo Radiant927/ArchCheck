@@ -778,19 +778,23 @@ elif st.session_state.page == "results":
 
     high = sum(1 for i in all_issues if i.get("severity") == "High")
 
+    _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
+    _n_man = sum(1 for i in all_issues if i.get("review_status") == "manual")
+    _n_disc = sum(1 for r in (civil_r, eee_r, building_r, structural_r) if r)
+
     s1, s2, s3, s4, s5, s6 = st.columns(6)
     with s1:
         st.markdown(f'<div class="aicher-stat blue"><div class="value">{len(all_issues)}</div><div class="label">{T["s_total"]}</div></div>', unsafe_allow_html=True)
     with s2:
-        st.markdown(f'<div class="aicher-stat blue"><div class="value">{len(civil_r)}</div><div class="label">{T["s_civil"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat green"><div class="value">{_n_ver}</div><div class="label">✅ {T["review_verified"]}</div></div>', unsafe_allow_html=True)
     with s3:
-        st.markdown(f'<div class="aicher-stat orange"><div class="value">{len(eee_r)}</div><div class="label">{T["s_eee"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat orange"><div class="value">{_n_man}</div><div class="label">⚠️ {T["review_manual"]}</div></div>', unsafe_allow_html=True)
     with s4:
-        st.markdown(f'<div class="aicher-stat purple"><div class="value">{len(building_r)}</div><div class="label">{T["s_bld"]}</div></div>', unsafe_allow_html=True)
-    with s5:
         st.markdown(f'<div class="aicher-stat red"><div class="value">{len(conflicts)}</div><div class="label">{T["s_conf"]}</div></div>', unsafe_allow_html=True)
+    with s5:
+        st.markdown(f'<div class="aicher-stat purple"><div class="value">{_n_disc}</div><div class="label">{T["s_disc"]}</div></div>', unsafe_allow_html=True)
     with s6:
-        st.markdown(f'<div class="aicher-stat green"><div class="value">{high}</div><div class="label">{T["s_high"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat blue"><div class="value">{high}</div><div class="label">{T["s_high"]}</div></div>', unsafe_allow_html=True)
 
     # Standard-switching diff summary
     if added_in_other or removed_in_other:
@@ -927,14 +931,6 @@ elif st.session_state.page == "results":
 
     st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
 
-    t1, t2, t3, t4, t5 = st.tabs([
-        f'{T["tab_civil"]} ({len(civil_r)})',
-        f'{T["tab_eee"]} ({len(eee_r)})',
-        f'{T["tab_bld"]} ({len(building_r)})',
-        f'{T["tab_str"]} ({len(structural_r)})',
-        f'{T["tab_conf"]} ({len(conflicts)})',
-    ])
-
     def render_issue_cards(issues, css_class, show_floor=True):
         if not issues:
             st.success(T["no_issue"])
@@ -959,12 +955,21 @@ elif st.session_state.page == "results":
                 floor_tag = f'<span class="floor-tag">{_floor_label(iss["floor_name"])}</span>'
             loc_label = T["loc"]
             ref_label = T["ref"]
+            _tc = {"civil": C["blue"], "eee": C["orange"], "building": C["purple"],
+                   "structural": C["green"], "conflict": C["red"]}
+            _tl = {"civil": T["s_civil"], "eee": T["s_eee"], "building": T["s_bld"],
+                   "structural": T["s_str"], "conflict": T["s_conf"]}
+            _itype = iss.get("type", "")
+            _tag = (f'<span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;'
+                    f'font-size:12px;font-weight:600;background:{_tc.get(_itype, C["silver"])}18;'
+                    f'color:{_tc.get(_itype, C["silver"])};">{_tl.get(_itype, _itype)}</span>')
             evid = ""
             if iss.get("review_status") == "verified" and iss.get("review_evidence"):
                 evid = (f'<div style="font-size:12px;color:{C["green"]};margin-top:4px;'
                         f'font-family:monospace;">🔍 {T["review_evid"]}: {iss["review_evidence"][:150]}</div>')
             st.markdown(f'''<div class="issue-card {css_class}">
             <div style="font-weight:700;font-size:15px;">{i}. {iss["title"]}
+            {_tag}
             <span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:600;background:{sev_color}18;color:{sev_color};">{sev}</span>
             {review_badge}{floor_tag}</div>
             <div style="font-size:14px;color:{C["muted"]};margin-top:4px;">{iss.get("description","")}</div>
@@ -972,27 +977,19 @@ elif st.session_state.page == "results":
             {evid}
             </div>''', unsafe_allow_html=True)
 
-    with t1:
-        render_issue_cards(civil_r, "civil")
-    with t2:
-        render_issue_cards(eee_r, "eee")
-    with t3:
+    # ② Compliance Judge — unified findings, each tagged by discipline
+    _findings = civil_r + eee_r + building_r + structural_r
+    if _findings:
+        render_issue_cards(_findings, "all")
+    else:
+        st.success(T["no_issue"])
+    if conflicts:
         st.markdown(
-            f'<div style="font-size:13px;color:{C["muted"]};margin-bottom:12px;padding:10px;background:{C["purple"]}0a;border-radius:4px;">'
-            f'{T["bld_blurb"]}</div>',
+            f'<div style="font-size:15px;font-weight:700;color:{C["red"]};margin:18px 0 6px;">'
+            f'{T["tab_conf"]} ({len(conflicts)})</div>',
             unsafe_allow_html=True,
         )
-        render_issue_cards(building_r, "building", show_floor=True)
-    with t4:
-        if conflicts:
-            render_issue_cards(conflicts, "conflict")
-        else:
-            st.success(T["no_conflict"])
-    with t5:
-        if structural_r:
-            render_issue_cards(structural_r, "structural")
-        else:
-            st.success(T["no_issue"])
+        render_issue_cards(conflicts, "conflict")
 
     # ⑤ Independent Reviewer — verification summary
     _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
