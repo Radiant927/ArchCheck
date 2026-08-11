@@ -21,6 +21,12 @@
         "field": "depth_m",
         "operator": ">=",
         "threshold": 0.3,
+        "dynamic_threshold": {
+            "formula": "max(0.2, min({span_m}, 6)/20)",
+            "query": "minimum section depth for a {span_m}m-span beam (constructional requirement)",
+            "fallback": 0.2,
+            "context_fields": ["span_m"]
+        },
         "unit": "m",
         "condition_field": "element_type",
         "condition_operator": "==",

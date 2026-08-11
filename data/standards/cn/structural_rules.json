@@ -21,6 +21,12 @@
         "field": "depth_m",
         "operator": ">=",
         "threshold": 0.3,
+        "dynamic_threshold": {
+            "formula": "max(0.2, min({span_m}, 6)/20)",
+            "query": "跨度 {span_m}m 的次梁，构造要求的最小截面高度",
+            "fallback": 0.2,
+            "context_fields": ["span_m"]
+        },
         "unit": "m",
         "condition_field": "element_type",
         "condition_operator": "==",
