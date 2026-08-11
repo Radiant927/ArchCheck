@@ -629,14 +629,14 @@ elif st.session_state.page == "upload":
                     )
                     a1, a2, a3, a4 = st.columns(4)
                     area = a1.number_input(T["p_area"], value=float(room.get("room_area_sqm", 0)), key=f"{rid}_a", step=5.0)
-                    exits = a2.number_input(T["p_exits"], value=int(room.get("exit_count", 1)), key=f"{rid}_x", min_value=0, max_value=4)
+                    exits = a2.number_input(T["p_exits"], value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=4)
                     corr = a3.number_input(T["p_corridor"], value=float(room.get("corridor_length_m", 0)), key=f"{rid}_c", step=1.0)
                     light = a4.checkbox(T["p_light"], value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
                     b1, b2, b3, b4 = st.columns(4)
                     water = b1.number_input(T["p_water"], value=float(room.get("dist_to_water_m", 5.0)), key=f"{rid}_w", step=0.1)
                     circuit = b2.number_input(T["p_load"], value=float(room.get("circuit_load_a", 10)), key=f"{rid}_ld", step=1.0)
                     outlet = b3.number_input(T["p_outlet"], value=float(room.get("outlet_spacing_m", 5.0)), key=f"{rid}_o", step=0.5)
-                    door = b4.number_input(T["p_door"], value=float(room.get("door_width_m", 1.0)), key=f"{rid}_d", step=0.1)
+                    door = b4.number_input(T["p_door"], value=float(room.get("door_width_m") or 1.0), key=f"{rid}_d", step=0.1)
                     updated_rooms.append({
                         "id": rid, "name": room["name"], "type": room["type"],
                         "room_area_sqm": area, "exit_count": exits, "corridor_length_m": corr,
