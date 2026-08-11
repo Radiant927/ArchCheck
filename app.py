@@ -15,7 +15,7 @@ import core.i18n as i18n
 from core.config import C, OUTPUT
 from core.drawing import (generate_sample_image, annotate_image,
                           generate_correction_image, generate_building_section,
-                          render_room_plan, annotate_room_plan,
+                          generate_building_3d, render_room_plan, annotate_room_plan,
                           _fix_map)
 from core.report import generate_report
 from core.i18n import _room_type_label, _floor_label
@@ -379,9 +379,8 @@ if st.session_state.review_loading:
 
     ca, cb = st.columns([1, 2])
     with ca:
-        st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-        st.image(uimg)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.image(uimg)
     with cb:
         st.markdown(
             f'<div style="font-size:36px;font-weight:800;color:{C["text"]};margin-bottom:20px;">'
@@ -844,9 +843,8 @@ elif st.session_state.page == "results":
     st.markdown(f'<div style="font-size:13px;color:{C["muted"]};margin-bottom:12px;max-width:860px;">{T["section_h"]}</div>', unsafe_allow_html=True)
     sec_col1, sec_col2 = st.columns([3, 2])
     with sec_col1:
-        st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-        st.image(sec_img, width="stretch")
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.image(sec_img, width="stretch")
     with sec_col2:
         bld_n = len(building_r)
         if bld_n:
@@ -946,6 +944,9 @@ elif st.session_state.page == "results":
             )
             render_issue_cards(conflicts, "conflict")
     with _rcol:
+        st.markdown(f'<div style="font-weight:700;font-size:15px;color:{C["blue"]};margin-bottom:6px;">🏗️ {T["view3d_t"]}</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.image(generate_building_3d(floors), width="stretch")
         floor_names = list(annotated_by_floor.keys())
         if floor_names:
             _sidx = st.radio(
@@ -953,10 +954,9 @@ elif st.session_state.page == "results":
                 format_func=lambda i: floor_names[i], index=0, horizontal=True,
                 label_visibility="collapsed", key="rs_floor")
             _fn = floor_names[_sidx]
-            st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["blue"]};margin-bottom:6px;">📐 {_fn}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-            st.image(annotated_by_floor[_fn], width="stretch")
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-weight:700;font-size:15px;color:{C["blue"]};margin-bottom:6px;">📐 {_fn} — {T["view_top_t"]}</div>', unsafe_allow_html=True)
+            with st.container(border=True):
+                st.image(annotated_by_floor[_fn], width="stretch")
             st.caption(T["before_cap"])
 
     # ⑤ Independent Reviewer — verification summary

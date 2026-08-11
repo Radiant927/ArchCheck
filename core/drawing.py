@@ -338,6 +338,76 @@ def render_room_plan(rooms, floor_name=""):
     return img, room_map
 
 
+def _darken(color, f=0.7):
+    """Darker shade of an RGB color (tuple or #RRGGBB) for 3D side faces."""
+    if isinstance(color, str):
+        r = int(color[1:3], 16); g = int(color[3:5], 16); b = int(color[5:7], 16)
+    else:
+        r, g, b = color
+    return (int(r * f), int(g * f), int(b * f))
+
+
+def generate_building_3d(floors):
+    """Isometric 3D view of the building — every floor's real room footprint
+    extruded vertically, so the whole multi-storey 3D structure is visible at
+    once (top floor overlaps lower ones). Falls back to a note if no room
+    geometry is available."""
+    W, H = 1800, 1400
+    img = Image.new("RGB", (W, H), (250, 251, 252))
+    draw = ImageDraw.Draw(img)
+    ft, fm, fs = _load_fonts((36, 28, 22))
+    title = "建筑 3D 立体视图" if LANG == "zh" else "BUILDING 3D ISOMETRIC VIEW"
+    draw.rectangle([0, 0, W, 70], fill=(30, 35, 45))
+    draw.text((40, 12), title, fill=(240, 245, 250), font=ft)
+
+    pts = [p for f in floors for r in f.get("rooms", []) for p in (r.get("hull") or [])]
+    if not pts:
+        draw.text((60, 130), "无房间几何数据" if LANG == "zh" else "No room geometry data",
+                  fill=(150, 155, 165), font=fm)
+        return img
+    minx = min(p[0] for p in pts); maxx = max(p[0] for p in pts)
+    miny = min(p[1] for p in pts); maxy = max(p[1] for p in pts)
+    spanx = max(maxx - minx, 1e-6); spany = max(maxy - miny, 1e-6)
+
+    n = len(floors)
+    floor_h = 170
+    wall_h = 34
+    s = min((W - 320) / (spanx + spany), (H - 250 - (n - 1) * floor_h) / (spanx + spany))
+    s = max(s, 1e-6)
+    cx = W // 2
+    base_cy = H - 100
+
+    def iso(x, y, z):
+        u = x - minx - spanx / 2
+        v = y - miny - spany / 2
+        sx = cx + (u - v) * 0.866 * s
+        sy = base_cy + (u + v) * 0.5 * s - z
+        return int(sx), int(sy)
+
+    for idx in range(n - 1, -1, -1):  # bottom -> top so upper floors overlap
+        f = floors[idx]
+        z = (n - 1 - idx) * floor_h
+        polys = [(poly, r) for r in f.get("rooms", []) if r.get("hull")
+                 for poly in [[iso(p[0], p[1], z) for p in r["hull"]]]]
+        for poly, r in polys:
+            base = ROOM_TYPE_FILL.get(r.get("type", "Office"), ROOM_TYPE_FILL["Office"])
+            dark = _darken(base)
+            for i in range(len(poly)):
+                x1, y1 = poly[i]; x2, y2 = poly[(i + 1) % len(poly)]
+                draw.polygon([(x1, y1), (x2, y2), (x2, y2 + wall_h), (x1, y1 + wall_h)], fill=dark)
+        for poly, r in polys:
+            fill = ROOM_TYPE_FILL.get(r.get("type", "Office"), ROOM_TYPE_FILL["Office"])
+            draw.polygon(poly, fill=fill, outline=(110, 120, 130))
+            cr = sum(p[0] for p in poly) // len(poly)
+            cc = sum(p[1] for p in poly) // len(poly)
+            nb = draw.textbbox((0, 0), r.get("name", "?"), font=fs)
+            draw.text((cr - (nb[2] - nb[0]) // 2, cc - 9), r.get("name", "?"), fill=(30, 35, 45), font=fs)
+        lbl = _floor_label(f.get("floor_name", f"F{idx}"))
+        lb = draw.textbbox((0, 0), lbl, font=fm)
+        draw.text((cx - (lb[2] - lb[0]) // 2, base_cy - z + 6), lbl, fill=(60, 65, 75), font=fm)
+    return img
+
+
 def annotate_room_plan(img, issues, room_map):
     """Overlay numbered markers at each issue's room centroid (fallback: fixed)."""
     img = img.copy().convert("RGBA")
