@@ -12,6 +12,8 @@ use m) and every conversion is scaled accordingly.
 import re
 from pathlib import Path
 
+import networkx as nx
+
 try:
     import ifcopenshell
     import ifcopenshell.geom as ifcgeom
@@ -234,7 +236,7 @@ def _associate_doors(space_geom, door_geom, scale, spaces, space_storey, door_st
             if el and el.is_a("IfcDoor"):
                 assoc.setdefault(s.GlobalId, set()).add(el.GlobalId)
     threshold = DOOR_ASSOC_DIST_M / scale
-    for gid, (hull, _) in space_geom.items():
+    for gid, (hull, _, _) in space_geom.items():
         if not hull:
             continue
         sg = space_storey.get(gid)
@@ -247,6 +249,71 @@ def _associate_doors(space_geom, door_geom, scale, spaces, space_storey, door_st
             if _dist_to_poly(centroid, hull) <= threshold:
                 assoc.setdefault(gid, set()).add(dg)
     return assoc
+
+
+def _compute_travel_distances(space_geom, door_room, door_geom, scale):
+    """{space_gid: travel_distance_m} — shortest path from each room to the
+    nearest exit room.
+
+    Rooms are graph nodes; an edge connects two rooms that share a door, weighted
+    by their centroid distance in metres. Exits come from single-room (exterior)
+    doors; for boundary-less models where geometry associates every door with
+    several rooms, a door on the building's bounding-box edge is treated as an
+    exterior exit. Returns {} when no exit or adjacency is usable.
+    """
+    centroids = {}
+    for gid, (_, _, centroid) in space_geom.items():
+        if centroid:
+            centroids[gid] = (centroid[0] * scale, centroid[1] * scale)
+    if not centroids:
+        return {}
+    G = nx.Graph()
+    G.add_nodes_from(centroids)
+    door_rooms = {}
+    for sgid, doors in door_room.items():
+        for d in doors:
+            door_rooms.setdefault(d, []).append(sgid)
+    for rooms in door_rooms.values():
+        for i in range(len(rooms)):
+            for j in range(i + 1, len(rooms)):
+                a, b = rooms[i], rooms[j]
+                if a in centroids and b in centroids:
+                    dx = centroids[a][0] - centroids[b][0]
+                    dy = centroids[a][1] - centroids[b][1]
+                    G.add_edge(a, b, weight=(dx * dx + dy * dy) ** 0.5)
+    # primary exits: doors that serve exactly one room (exterior/openings)
+    exits = {rooms[0] for rooms in door_rooms.values()
+             if len(rooms) == 1 and rooms[0] in centroids}
+    # fallback exits: doors on the building's bounding-box edge (models whose
+    # geometry association binds every door to several rooms, e.g. no boundaries)
+    if not exits:
+        pts = [c for _, c in door_geom.values() if c]
+        if pts:
+            xs = [p[0] * scale for p in pts]
+            ys = [p[1] * scale for p in pts]
+            minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+            edge_tol = 0.5
+            for d, (_, c) in door_geom.items():
+                if not c:
+                    continue
+                px, py = c[0] * scale, c[1] * scale
+                on_edge = (px - minx <= edge_tol or maxx - px <= edge_tol
+                           or py - miny <= edge_tol or maxy - py <= edge_tol)
+                if on_edge:
+                    for r in door_rooms.get(d, []):
+                        if r in centroids:
+                            exits.add(r)
+    if not exits:
+        return {}
+    result = {}
+    for gid in centroids:
+        try:
+            lengths = nx.single_source_dijkstra_path_length(G, gid, weight="weight")
+            reachable = [lengths[e] for e in exits if e in lengths]
+            result[gid] = round(min(reachable), 1) if reachable else None
+        except Exception:
+            result[gid] = None
+    return result
 
 
 def _classify_room_type(name):
@@ -265,13 +332,14 @@ def _classify_room_type(name):
     return "Office"
 
 
-def _space_to_room(space, area, ref="", door_widths=None):
+def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None):
     """Build a review-engine room dict from a real IfcSpace.
 
     exit_count and door_width_m come from the real doors associated with the
     space. door_widths=None means the model has no usable door data -> both are
     None so the engine reports "data missing"; door_widths=[] is a real room
-    with no doors (exit_count 0).
+    with no doors (exit_count 0). travel_distance is the computed egress path
+    (m) to the nearest exit room, feeding corridor_length_m.
     """
     name = space.Name or "?"
     rtype = _classify_room_type(f"{ref} {name}")
@@ -293,7 +361,7 @@ def _space_to_room(space, area, ref="", door_widths=None):
         "dist_to_water_m": 5.0,
         "circuit_load_a": 10,
         "outlet_spacing_m": 5.0,
-        "corridor_length_m": 0,
+        "corridor_length_m": travel_distance or 0,
     }
 
 
@@ -365,8 +433,8 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         if sg not in kept_storey_gids:
             continue
         for sp in slist:
-            hull, _ = _space_hull(sp, geom_settings)
-            space_geom[sp.GlobalId] = (hull, _hull_area(hull, scale) if hull else 0.0)
+            hull, centroid = _space_hull(sp, geom_settings)
+            space_geom[sp.GlobalId] = (hull, _hull_area(hull, scale) if hull else 0.0, centroid)
             space_storey[sp.GlobalId] = sg
             kept_spaces.append(sp)
 
@@ -380,6 +448,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
 
     door_room = _associate_doors(space_geom, door_geom, scale, kept_spaces,
                                  space_storey, door_storey)
+    travel = _compute_travel_distances(space_geom, door_room, door_geom, scale)
 
     floors = []
     for storey in storeys:
@@ -399,11 +468,12 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
             sized = sized[:max_rooms_per_floor]
         rooms = []
         for s in sized:
-            area = space_geom.get(s.GlobalId, (None, 0.0))[1]
+            area = space_geom.get(s.GlobalId, (None, 0.0, None))[1]
             widths = None
             if door_meta:  # model has doors: report real per-room door data
                 widths = [door_meta[g] for g in door_room.get(s.GlobalId, set()) if g in door_meta]
-            rooms.append(_space_to_room(s, area, ref_map.get(s.GlobalId, ""), widths))
+            rooms.append(_space_to_room(s, area, ref_map.get(s.GlobalId, ""), widths,
+                                        travel.get(s.GlobalId)))
 
         floors.append({
             "name": storey.Name or "?",

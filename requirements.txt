@@ -12,3 +12,5 @@ pypdf
 pymupdf
 rapidocr_onnxruntime
 numpy
+# BIM egress graph (real travel distance)
+networkx
