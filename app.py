@@ -780,20 +780,17 @@ elif st.session_state.page == "results":
     _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
     _n_man = sum(1 for i in all_issues if i.get("review_status") == "manual")
     _n_disc = sum(1 for r in (civil_r, eee_r, building_r, structural_r) if r)
-    _trust = round(_n_ver / len(all_issues) * 100) if all_issues else 100
 
-    s1, s2, s3, s4, s5, s6 = st.columns(6)
+    s1, s2, s3, s4, s5 = st.columns(5)
     with s1:
-        st.markdown(f'<div class="aicher-stat green"><div class="value">{_trust}%</div><div class="label">🛡️ {T["trust_t"]}</div></div>', unsafe_allow_html=True)
-    with s2:
         st.markdown(f'<div class="aicher-stat blue"><div class="value">{len(all_issues)}</div><div class="label">{T["s_total"]}</div></div>', unsafe_allow_html=True)
+    with s2:
+        st.markdown(f'<div class="aicher-stat green"><div class="value">{_n_ver}</div><div class="label">✅ {T["review_verified"]}</div></div>', unsafe_allow_html=True)
     with s3:
-        st.markdown(f'<div class="aicher-stat blue"><div class="value">{_n_ver}</div><div class="label">✅ {T["review_verified"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="aicher-stat blue"><div class="value">{high}</div><div class="label">{T["s_high"]}</div></div>', unsafe_allow_html=True)
     with s4:
-        st.markdown(f'<div class="aicher-stat orange"><div class="value">{_n_man}</div><div class="label">⚠️ {T["review_manual"]}</div></div>', unsafe_allow_html=True)
-    with s5:
         st.markdown(f'<div class="aicher-stat red"><div class="value">{len(conflicts)}</div><div class="label">{T["s_conf"]}</div></div>', unsafe_allow_html=True)
-    with s6:
+    with s5:
         st.markdown(f'<div class="aicher-stat purple"><div class="value">{_n_disc}</div><div class="label">{T["s_disc"]}</div></div>', unsafe_allow_html=True)
     if _n_man:
         st.caption(T["trust_note"])
@@ -881,17 +878,11 @@ elif st.session_state.page == "results":
             sev = iss.get("severity", "Medium")
             sev_color = {"High": C["red"], "Medium": C["orange"], "Low": C["silver"], "Missing": C["silver"]}.get(sev, C["silver"])
             review_badge = ""
-            if iss.get("review_status"):
-                if iss["review_status"] == "verified":
-                    review_badge = (f'<span style="display:inline-block;margin-left:6px;padding:1px 8px;'
-                                    f'border-radius:2px;font-size:12px;font-weight:600;'
-                                    f'background:{C["green"]}18;color:{C["green"]};">'
-                                    f'✅ {T["review_verified"]}</span>')
-                else:
-                    review_badge = (f'<span style="display:inline-block;margin-left:6px;padding:1px 8px;'
-                                    f'border-radius:2px;font-size:12px;font-weight:600;'
-                                    f'background:{C["orange"]}18;color:{C["orange"]};">'
-                                    f'⚠️ {T["review_manual"]}</span>')
+            if iss.get("review_status") == "verified":
+                review_badge = (f'<span style="display:inline-block;margin-left:6px;padding:1px 8px;'
+                                f'border-radius:2px;font-size:12px;font-weight:600;'
+                                f'background:{C["green"]}18;color:{C["green"]};">'
+                                f'✅ {T["review_verified"]}</span>')
             floor_tag = ""
             if show_floor and iss.get("floor_name"):
                 floor_tag = f'<span class="floor-tag">{_floor_label(iss["floor_name"])}</span>'
@@ -963,12 +954,10 @@ elif st.session_state.page == "results":
     _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
     _n_man = sum(1 for i in all_issues if i.get("review_status") == "manual")
     st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["red"]};margin:22px 0 10px;">⑤ {T["agent_reviewer"]}</div>', unsafe_allow_html=True)
-    if _n_ver or _n_man:
+    if _n_ver:
         st.markdown(
             f'<div style="font-size:14px;color:{C["muted"]};margin-bottom:12px;">'
             f'<span style="color:{C["green"]};font-weight:600;">✅ {T["review_verified"]}: {_n_ver}</span>'
-            f' &nbsp;·&nbsp; '
-            f'<span style="color:{C["orange"]};font-weight:600;">⚠️ {T["review_manual"]}: {_n_man}</span>'
             f' &nbsp;·&nbsp; <span style="color:{C["silver"]};">{T["kb_sub"]}</span></div>',
             unsafe_allow_html=True,
         )
@@ -979,6 +968,8 @@ elif st.session_state.page == "results":
                     f'🔍 {iss["title"]} @ {iss.get("location","")} — {iss["review_evidence"][:120]}</div>',
                     unsafe_allow_html=True,
                 )
+    elif _n_man:
+        st.caption(T["trust_note"])
     else:
         st.caption(T["kb_no_file"])
 
