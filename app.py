@@ -124,6 +124,19 @@ div[data-testid="stStatus"] {{
 .issue-card.eee      {{ border-left:4px solid {C["orange"]}; }}
 .issue-card.building {{ border-left:4px solid {C["purple"]}; background:#F8F5FC; }}
 .issue-card.conflict {{ border-left:4px solid {C["red"]}; background:#FEF2F2; }}
+.card-title {{ font-weight:700; font-size:15px; }}
+.card-desc {{ font-size:14px; color:#6B7480; margin-top:4px; }}
+.card-meta {{ font-size:13px; color:#9BA3AB; margin-top:4px; font-family:monospace; }}
+.tag {{ display:inline-block; margin-left:8px; padding:1px 8px; border-radius:2px; font-size:12px; font-weight:600; }}
+.tag-disc-civil {{ background:{C["blue"]}18; color:{C["blue"]}; }}
+.tag-disc-eee {{ background:{C["orange"]}18; color:{C["orange"]}; }}
+.tag-disc-building {{ background:{C["purple"]}18; color:{C["purple"]}; }}
+.tag-disc-structural {{ background:{C["green"]}18; color:{C["green"]}; }}
+.tag-disc-conflict {{ background:{C["red"]}18; color:{C["red"]}; }}
+.tag-sev-high {{ background:{C["red"]}18; color:{C["red"]}; }}
+.tag-sev-medium {{ background:{C["orange"]}18; color:{C["orange"]}; }}
+.tag-sev-low {{ background:{C["silver"]}18; color:{C["silver"]}; }}
+.tag-sev-missing {{ background:{C["silver"]}18; color:{C["silver"]}; }}
 .sev-badge {{
     display:inline-block; margin-left:8px; padding:1px 8px; border-radius:2px;
     font-size:12px; font-weight:600;
@@ -206,13 +219,18 @@ def _render_params_editor(bdata):
     bp = bdata.get("building_params", {})
     with st.expander(T["bld_params_t"], expanded=True):
         st.caption(T["bld_params_caption"])
+        st.markdown(
+            f'<div style="font-size:12px;margin-bottom:8px;">'
+            f'<span style="color:{C["green"]};">🟢 {T["src_model"]}</span> &nbsp;·&nbsp; '
+            f'<span style="color:{C["orange"]};">🟠 {T["src_default"]}</span></div>',
+            unsafe_allow_html=True)
         _dv = st.session_state.get("data_version", 0)
         bp1, bp2 = st.columns(2)
-        bw = bp1.number_input(T["p_ground_exit"], value=float(bp.get("ground_floor_exit_width_m", 2.4)), step=0.1, key=f"bp_bw_{_dv}")
-        fp = bp2.number_input(T["p_fire_pool"], value=float(bp.get("fire_pool_volume_m3", 160)), step=10.0, key=f"bp_fp_{_dv}")
-        tc = bp1.number_input(T["p_transformer"], value=float(bp.get("transformer_capacity_kw", 650)), step=50.0, key=f"bp_tc_{_dv}")
-        ep = bp2.number_input(T["p_emergency"], value=float(bp.get("emergency_power_duration_min", 60)), step=10.0, key=f"bp_ep_{_dv}")
-        fl = bp1.number_input(T["p_floors"], value=int(bp.get("total_floors", 3)), min_value=1, max_value=20, step=1, key=f"bp_fl_{_dv}")
+        bw = bp1.number_input(f"🟠 {T['p_ground_exit']}", value=float(bp.get("ground_floor_exit_width_m", 2.4)), step=0.1, key=f"bp_bw_{_dv}")
+        fp = bp2.number_input(f"🟠 {T['p_fire_pool']}", value=float(bp.get("fire_pool_volume_m3", 160)), step=10.0, key=f"bp_fp_{_dv}")
+        tc = bp1.number_input(f"🟠 {T['p_transformer']}", value=float(bp.get("transformer_capacity_kw", 650)), step=50.0, key=f"bp_tc_{_dv}")
+        ep = bp2.number_input(f"🟠 {T['p_emergency']}", value=float(bp.get("emergency_power_duration_min", 60)), step=10.0, key=f"bp_ep_{_dv}")
+        fl = bp1.number_input(f"🟢 {T['p_floors']}", value=int(bp.get("total_floors", 3)), min_value=1, max_value=20, step=1, key=f"bp_fl_{_dv}")
         bp_updated = {
             "total_floors": int(fl), "ground_floor_exit_width_m": bw,
             "fire_pool_volume_m3": fp, "transformer_capacity_kw": tc,
@@ -234,15 +252,15 @@ def _render_params_editor(bdata):
                     unsafe_allow_html=True,
                 )
                 a1, a2, a3, a4 = st.columns(4)
-                area = a1.number_input(T["p_area"], value=float(room.get("room_area_sqm", 0)), key=f"{rid}_a", step=5.0)
-                exits = a2.number_input(T["p_exits"], value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=4)
-                corr = a3.number_input(T["p_corridor"], value=float(room.get("corridor_length_m", 0)), key=f"{rid}_c", step=1.0)
-                light = a4.checkbox(T["p_light"], value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
+                area = a1.number_input(f"🟢 {T['p_area']}", value=float(room.get("room_area_sqm", 0)), key=f"{rid}_a", step=5.0)
+                exits = a2.number_input(f"🟢 {T['p_exits']}", value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=4)
+                corr = a3.number_input(f"🟢 {T['p_corridor']}", value=float(room.get("corridor_length_m", 0)), key=f"{rid}_c", step=1.0)
+                light = a4.checkbox(f"🟠 {T['p_light']}", value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
                 b1, b2, b3, b4 = st.columns(4)
-                water = b1.number_input(T["p_water"], value=float(room.get("dist_to_water_m", 5.0)), key=f"{rid}_w", step=0.1)
-                circuit = b2.number_input(T["p_load"], value=float(room.get("circuit_load_a", 10)), key=f"{rid}_ld", step=1.0)
-                outlet = b3.number_input(T["p_outlet"], value=float(room.get("outlet_spacing_m", 5.0)), key=f"{rid}_o", step=0.5)
-                door = b4.number_input(T["p_door"], value=float(room.get("door_width_m") or 1.0), key=f"{rid}_d", step=0.1)
+                water = b1.number_input(f"🟠 {T['p_water']}", value=float(room.get("dist_to_water_m", 5.0)), key=f"{rid}_w", step=0.1)
+                circuit = b2.number_input(f"🟠 {T['p_load']}", value=float(room.get("circuit_load_a", 10)), key=f"{rid}_ld", step=1.0)
+                outlet = b3.number_input(f"🟠 {T['p_outlet']}", value=float(room.get("outlet_spacing_m", 5.0)), key=f"{rid}_o", step=0.5)
+                door = b4.number_input(f"🟢 {T['p_door']}", value=float(room.get("door_width_m") or 1.0), key=f"{rid}_d", step=0.1)
                 updated_rooms.append({
                     "id": rid, "name": room["name"], "type": room["type"],
                     "room_area_sqm": area, "exit_count": exits, "corridor_length_m": corr,
@@ -866,31 +884,28 @@ elif st.session_state.page == "results":
             return
         for i, iss in enumerate(issues, 1):
             sev = iss.get("severity", "Medium")
-            sev_color = {"High": C["red"], "Medium": C["orange"], "Low": C["silver"], "Missing": C["silver"]}.get(sev, C["silver"])
             floor_tag = ""
             if show_floor and iss.get("floor_name"):
                 floor_tag = f'<span class="floor-tag">{_floor_label(iss["floor_name"])}</span>'
             loc_label = T["loc"]
             ref_label = T["ref"]
-            _tc = {"civil": C["blue"], "eee": C["orange"], "building": C["purple"],
-                   "structural": C["green"], "conflict": C["red"]}
             _tl = {"civil": T["disc_civil"], "eee": T["disc_eee"], "building": T["disc_bld"],
                    "structural": T["disc_str"], "conflict": T["disc_conf"]}
             _itype = iss.get("type", "")
-            _tag = (f'<span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;'
-                    f'font-size:12px;font-weight:600;background:{_tc.get(_itype, C["silver"])}18;'
-                    f'color:{_tc.get(_itype, C["silver"])};">{_tl.get(_itype, _itype)}</span>')
+            _sev_cls = {"High": "high", "Medium": "medium", "Low": "low", "Missing": "missing"}.get(sev, "low")
+            _disc_cls = {"civil": "civil", "eee": "eee", "building": "building",
+                         "structural": "structural", "conflict": "conflict"}.get(_itype, "low")
             evid = ""
             if iss.get("review_status") == "verified" and iss.get("review_evidence"):
-                evid = (f'<div style="font-size:12px;color:{C["green"]};margin-top:4px;'
-                        f'font-family:monospace;">🔍 {T["review_evid"]}: {iss["review_evidence"][:150]}</div>')
+                evid = (f'<div class="card-meta" style="color:{C["green"]};">'
+                        f'🔍 {T["review_evid"]}: {iss["review_evidence"][:150]}</div>')
             st.markdown(f'''<div class="issue-card {css_class}">
-            <div style="font-weight:700;font-size:15px;">{i}. {iss["title"]}
-            {_tag}
-            <span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:600;background:{sev_color}18;color:{sev_color};">{sev}</span>
+            <div class="card-title">{i}. {iss["title"]}
+            <span class="tag tag-disc-{_disc_cls}">{_tl.get(_itype, _itype)}</span>
+            <span class="tag tag-sev-{_sev_cls}">{sev}</span>
             {floor_tag}</div>
-            <div style="font-size:14px;color:{C["muted"]};margin-top:4px;">{iss.get("description","")}</div>
-            <div style="font-size:13px;color:{C["silver"]};margin-top:4px;font-family:monospace;">{loc_label}: {iss.get("location","-")} | {ref_label}: {iss.get("code_ref","-")}</div>
+            <div class="card-desc">{iss.get("description","")}</div>
+            <div class="card-meta">{loc_label}: {iss.get("location","-")} | {ref_label}: {iss.get("code_ref","-")}</div>
             {evid}
             </div>''', unsafe_allow_html=True)
 
