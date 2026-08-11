@@ -836,38 +836,6 @@ elif st.session_state.page == "results":
             if not added_in_other and not removed_in_other:
                 st.success(T["diff_identical"].format(cur=cur_name, oth=oth_name))
 
-    # ---- ④ Reasoner — LLM narrative / coordination ----
-    st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["green"]};margin:22px 0 10px;">④ {T["agent_reasoner"]}</div>', unsafe_allow_html=True)
-    ai_exp = st.expander(f"🤖 {T['ai_report_t']}")
-    with ai_exp:
-        if not llm.available():
-            st.info(T["ai_unavailable"])
-        else:
-            if st.button(T["ai_generate_btn"], key="ai_gen"):
-                with st.spinner("DeepSeek..."):
-                    try:
-                        st.session_state.ai_report = llm.generate_review_narrative(
-                            civil_r, eee_r, building_r, conflicts, STD_META, LANG)
-                        st.session_state.ai_coord = llm.coordinate_conflicts(
-                            conflicts, STD_META, LANG)
-                        st.session_state.ai_error = None
-                    except Exception as ex:
-                        st.session_state.ai_report = None
-                        st.session_state.ai_coord = None
-                        st.session_state.ai_error = str(ex)
-            if st.session_state.get("ai_report"):
-                st.markdown(st.session_state["ai_report"])
-                if st.session_state.get("ai_coord"):
-                    st.markdown("---")
-                    st.markdown(
-                        f'<div style="font-size:15px;font-weight:700;color:{C["purple"]};margin-bottom:6px;">'
-                        f'{T["ai_coord_t"]}</div>', unsafe_allow_html=True)
-                    st.markdown(st.session_state["ai_coord"])
-            elif st.session_state.get("ai_error"):
-                st.warning(f'{T["ai_fail_t"]}: {st.session_state["ai_error"]}')
-            else:
-                st.caption(T["ai_report_hint"])
-
     st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
 
     # Building cross-section: visual floor connection
@@ -902,35 +870,6 @@ elif st.session_state.page == "results":
                 unsafe_allow_html=True)
 
     st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
-
-    st.markdown(f'<div style="font-size:24px;font-weight:700;color:{C["text"]};margin-bottom:4px;">{T["before_after_t"]}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div style="font-size:14px;color:{C["muted"]};margin-bottom:16px;">{T["before_after_h"]}</div>', unsafe_allow_html=True)
-
-    floor_names = list(annotated_by_floor.keys())
-    if floor_names:
-        selected_floor = st.radio(
-            T["floor_sel"],
-            options=range(len(floor_names)),
-            format_func=lambda i: floor_names[i],
-            index=0,
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-        fname = floor_names[selected_floor]
-
-        bc1, bc2 = st.columns(2)
-        with bc1:
-            st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["red"]};margin-bottom:6px;">{T["before_l"]} — {fname}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-            st.image(annotated_by_floor[fname], width="stretch")
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.caption(T["before_cap"])
-        with bc2:
-            st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["green"]};margin-bottom:6px;">{T["after_l"]} — {fname}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
-            st.image(correction_by_floor[fname], width="stretch")
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.caption(T["after_cap"])
 
     st.markdown('<hr class="aicher-divider">', unsafe_allow_html=True)
 
@@ -980,7 +919,7 @@ elif st.session_state.page == "results":
             {evid}
             </div>''', unsafe_allow_html=True)
 
-    # ② Compliance Judge — unified findings, each tagged by discipline
+    # ② Compliance Judge — unified findings (left) + floor plan (right)
     _fopt = {T["disc_civil"]: "civil", T["disc_eee"]: "eee", T["disc_bld"]: "building",
              T["disc_str"]: "structural", T["disc_conf"]: "conflict"}
     _flt = st.radio(
@@ -990,17 +929,33 @@ elif st.session_state.page == "results":
     if _flt != T["filter_all"]:
         _fid = _fopt[_flt]
         _findings = [i for i in _findings if i.get("type") == _fid]
-    if _findings:
-        render_issue_cards(_findings, "all")
-    else:
-        st.success(T["no_issue"])
-    if conflicts:
-        st.markdown(
-            f'<div style="font-size:15px;font-weight:700;color:{C["red"]};margin:18px 0 6px;">'
-            f'{T["tab_conf"]} ({len(conflicts)})</div>',
-            unsafe_allow_html=True,
-        )
-        render_issue_cards(conflicts, "conflict")
+
+    _lcol, _rcol = st.columns([3, 2])
+    with _lcol:
+        if _findings:
+            render_issue_cards(_findings, "all")
+        else:
+            st.success(T["no_issue"])
+        if conflicts:
+            st.markdown(
+                f'<div style="font-size:15px;font-weight:700;color:{C["red"]};margin:18px 0 6px;">'
+                f'{T["tab_conf"]} ({len(conflicts)})</div>',
+                unsafe_allow_html=True,
+            )
+            render_issue_cards(conflicts, "conflict")
+    with _rcol:
+        floor_names = list(annotated_by_floor.keys())
+        if floor_names:
+            _sidx = st.radio(
+                T["floor_sel"], options=range(len(floor_names)),
+                format_func=lambda i: floor_names[i], index=0, horizontal=True,
+                label_visibility="collapsed", key="rs_floor")
+            _fn = floor_names[_sidx]
+            st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["blue"]};margin-bottom:6px;">📐 {_fn}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="aicher-img-frame">', unsafe_allow_html=True)
+            st.image(annotated_by_floor[_fn], width="stretch")
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.caption(T["before_cap"])
 
     # ⑤ Independent Reviewer — verification summary
     _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
@@ -1024,6 +979,38 @@ elif st.session_state.page == "results":
                 )
     else:
         st.caption(T["kb_no_file"])
+
+    # ---- ④ Reasoner — LLM narrative / coordination ----
+    st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["green"]};margin:22px 0 10px;">④ {T["agent_reasoner"]}</div>', unsafe_allow_html=True)
+    ai_exp = st.expander(f"🤖 {T['ai_report_t']}")
+    with ai_exp:
+        if not llm.available():
+            st.info(T["ai_unavailable"])
+        else:
+            if st.button(T["ai_generate_btn"], key="ai_gen"):
+                with st.spinner("DeepSeek..."):
+                    try:
+                        st.session_state.ai_report = llm.generate_review_narrative(
+                            civil_r, eee_r, building_r, conflicts, STD_META, LANG)
+                        st.session_state.ai_coord = llm.coordinate_conflicts(
+                            conflicts, STD_META, LANG)
+                        st.session_state.ai_error = None
+                    except Exception as ex:
+                        st.session_state.ai_report = None
+                        st.session_state.ai_coord = None
+                        st.session_state.ai_error = str(ex)
+            if st.session_state.get("ai_report"):
+                st.markdown(st.session_state["ai_report"])
+                if st.session_state.get("ai_coord"):
+                    st.markdown("---")
+                    st.markdown(
+                        f'<div style="font-size:15px;font-weight:700;color:{C["purple"]};margin-bottom:6px;">'
+                        f'{T["ai_coord_t"]}</div>', unsafe_allow_html=True)
+                    st.markdown(st.session_state["ai_coord"])
+            elif st.session_state.get("ai_error"):
+                st.warning(f'{T["ai_fail_t"]}: {st.session_state["ai_error"]}')
+            else:
+                st.caption(T["ai_report_hint"])
 
     # Building-level correction suggestions
     if building_r:
