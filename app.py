@@ -22,7 +22,6 @@ from core.i18n import _room_type_label, _floor_label
 from core.engine import DEMO_DATA, run_full_review
 from bim.parser import parse_ifc, build_review_data
 import llm.client as llm
-from agents.reviewer import review_issues
 
 # ============================================================
 # PAGE CONFIG — must be first Streamlit call
@@ -464,9 +463,6 @@ if st.session_state.review_loading:
 
         time.sleep(0.6)
 
-    # Independent Reviewer: verify each finding against the RAG corpus (no LLM loop)
-    review_issues(results["all_issues"])
-
     st.session_state.civil_results = results["civil_results"]
     st.session_state.eee_results = results["eee_results"]
     st.session_state.building_results = results["building_results"]
@@ -777,23 +773,17 @@ elif st.session_state.page == "results":
 
     high = sum(1 for i in all_issues if i.get("severity") == "High")
 
-    _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
-    _n_man = sum(1 for i in all_issues if i.get("review_status") == "manual")
     _n_disc = sum(1 for r in (civil_r, eee_r, building_r, structural_r) if r)
 
-    s1, s2, s3, s4, s5 = st.columns(5)
+    s1, s2, s3, s4 = st.columns(4)
     with s1:
         st.markdown(f'<div class="aicher-stat blue"><div class="value">{len(all_issues)}</div><div class="label">{T["s_total"]}</div></div>', unsafe_allow_html=True)
     with s2:
-        st.markdown(f'<div class="aicher-stat green"><div class="value">{_n_ver}</div><div class="label">✅ {T["review_verified"]}</div></div>', unsafe_allow_html=True)
-    with s3:
         st.markdown(f'<div class="aicher-stat blue"><div class="value">{high}</div><div class="label">{T["s_high"]}</div></div>', unsafe_allow_html=True)
-    with s4:
+    with s3:
         st.markdown(f'<div class="aicher-stat red"><div class="value">{len(conflicts)}</div><div class="label">{T["s_conf"]}</div></div>', unsafe_allow_html=True)
-    with s5:
+    with s4:
         st.markdown(f'<div class="aicher-stat purple"><div class="value">{_n_disc}</div><div class="label">{T["s_disc"]}</div></div>', unsafe_allow_html=True)
-    if _n_man:
-        st.caption(T["trust_note"])
 
     # Standard-switching diff summary
     if added_in_other or removed_in_other:
@@ -877,12 +867,6 @@ elif st.session_state.page == "results":
         for i, iss in enumerate(issues, 1):
             sev = iss.get("severity", "Medium")
             sev_color = {"High": C["red"], "Medium": C["orange"], "Low": C["silver"], "Missing": C["silver"]}.get(sev, C["silver"])
-            review_badge = ""
-            if iss.get("review_status") == "verified":
-                review_badge = (f'<span style="display:inline-block;margin-left:6px;padding:1px 8px;'
-                                f'border-radius:2px;font-size:12px;font-weight:600;'
-                                f'background:{C["green"]}18;color:{C["green"]};">'
-                                f'✅ {T["review_verified"]}</span>')
             floor_tag = ""
             if show_floor and iss.get("floor_name"):
                 floor_tag = f'<span class="floor-tag">{_floor_label(iss["floor_name"])}</span>'
@@ -904,7 +888,7 @@ elif st.session_state.page == "results":
             <div style="font-weight:700;font-size:15px;">{i}. {iss["title"]}
             {_tag}
             <span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:600;background:{sev_color}18;color:{sev_color};">{sev}</span>
-            {review_badge}{floor_tag}</div>
+            {floor_tag}</div>
             <div style="font-size:14px;color:{C["muted"]};margin-top:4px;">{iss.get("description","")}</div>
             <div style="font-size:13px;color:{C["silver"]};margin-top:4px;font-family:monospace;">{loc_label}: {iss.get("location","-")} | {ref_label}: {iss.get("code_ref","-")}</div>
             {evid}
@@ -949,29 +933,6 @@ elif st.session_state.page == "results":
             with st.container(border=True):
                 st.image(annotated_by_floor[_fn], width="stretch")
             st.caption(T["before_cap"])
-
-    # ⑤ Independent Reviewer — verification summary
-    _n_ver = sum(1 for i in all_issues if i.get("review_status") == "verified")
-    _n_man = sum(1 for i in all_issues if i.get("review_status") == "manual")
-    st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["red"]};margin:22px 0 10px;">⑤ {T["agent_reviewer"]}</div>', unsafe_allow_html=True)
-    if _n_ver:
-        st.markdown(
-            f'<div style="font-size:14px;color:{C["muted"]};margin-bottom:12px;">'
-            f'<span style="color:{C["green"]};font-weight:600;">✅ {T["review_verified"]}: {_n_ver}</span>'
-            f' &nbsp;·&nbsp; <span style="color:{C["silver"]};">{T["kb_sub"]}</span></div>',
-            unsafe_allow_html=True,
-        )
-        for iss in all_issues:
-            if iss.get("review_status") == "verified" and iss.get("review_evidence"):
-                st.markdown(
-                    f'<div style="font-size:13px;color:{C["green"]};padding:3px 0 3px 16px;font-family:monospace;">'
-                    f'🔍 {iss["title"]} @ {iss.get("location","")} — {iss["review_evidence"][:120]}</div>',
-                    unsafe_allow_html=True,
-                )
-    elif _n_man:
-        st.caption(T["trust_note"])
-    else:
-        st.caption(T["kb_no_file"])
 
     # ---- ④ Reasoner — LLM narrative / coordination ----
     st.markdown(f'<div style="font-size:18px;font-weight:700;color:{C["green"]};margin:22px 0 10px;">④ {T["agent_reasoner"]}</div>', unsafe_allow_html=True)
