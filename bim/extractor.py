@@ -62,6 +62,58 @@ def _extrude_profile(item):
     return None
 
 
+def _elem_bbox_dims(elem, scale, settings):
+    """(x, y, z) extents in metres of an element's tessellated geometry bbox."""
+    try:
+        shape = ifcgeom.create_shape(settings, elem)
+        v = shape.geometry.verts
+        if len(v) < 6:
+            return None
+        xs = v[0::3]
+        ys = v[1::3]
+        zs = v[2::3]
+        return ((max(xs) - min(xs)) * scale,
+                (max(ys) - min(ys)) * scale,
+                (max(zs) - min(zs)) * scale)
+    except Exception:
+        return None
+
+
+def _structural_sections(els, settings, scale, cap=15):
+    """Sample column/beam section sizes and slab thicknesses from storey elements.
+
+    Tessellating every column/slab is expensive on real buildings, so at most
+    `cap` elements of each type are sampled. Column section = the two horizontal
+    extents; beam section = (depth, width); slab = thickness (z). Returns three
+    sorted deduped lists in metres.
+    """
+    col_sec, beam_sec, slab_th = [], [], []
+    ncol = nbeam = nslab = 0
+    for e in els:
+        if e.is_a("IfcColumn"):
+            if ncol >= cap:
+                continue
+            ncol += 1
+            d = _elem_bbox_dims(e, scale, settings)
+            if d and 0.05 < min(d[:2]) and max(d[:2]) < 2.0:
+                col_sec.append(tuple(sorted((round(d[0], 3), round(d[1], 3)))))
+        elif e.is_a("IfcBeam"):
+            if nbeam >= cap:
+                continue
+            nbeam += 1
+            d = _elem_bbox_dims(e, scale, settings)
+            if d and 0.05 < d[2] < 2.0:
+                beam_sec.append((round(d[2], 3), round(min(d[:2]), 3)))
+        elif e.is_a("IfcSlab"):
+            if nslab >= cap:
+                continue
+            nslab += 1
+            d = _elem_bbox_dims(e, scale, settings)
+            if d and 0.02 < d[2] < 1.0:
+                slab_th.append(round(d[2], 3))
+    return sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th))
+
+
 def _door_shape_info(door, scale):
     """(width_m, centroid_xy) of a door from its tessellated geometry bbox.
 
@@ -492,6 +544,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 s = _ramp_slope(e, scale)
                 if s is not None:
                     ramp_slopes.append(s)
+        col_sec, beam_sec, slab_th = _structural_sections(els, geom_settings, scale)
 
         spaces = storey_spaces.get(storey.GlobalId, [])
         sized = sorted(spaces, key=lambda s: -(space_geom.get(s.GlobalId, (None, 0.0))[1]))
@@ -517,6 +570,9 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "columns": types.get("IfcColumn", 0) + types.get("IfcColumnStandardCase", 0),
                 "beams": types.get("IfcBeam", 0),
                 "slabs": types.get("IfcSlab", 0) + types.get("IfcSlabStandardCase", 0),
+                "column_sections": col_sec,
+                "beam_sections": beam_sec,
+                "slab_thicknesses": slab_th,
                 "stairs": types.get("IfcStair", 0),
                 "ramps": types.get("IfcRamp", 0) + types.get("IfcRampFlight", 0),
                 "ramp_slopes": sorted(ramp_slopes),
