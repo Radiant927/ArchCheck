@@ -13,5 +13,35 @@
         "severity": "Medium",
         "code_ref": "SS EN 1992",
         "message": "Column minimum section {value}m below constructional minimum {threshold}m. Increase column size."
+    },
+    {
+        "id": "STR-002",
+        "name": "Beam Minimum Depth Check",
+        "description": "Frame beam section depth must not fall below the 300mm constructional minimum",
+        "field": "depth_m",
+        "operator": ">=",
+        "threshold": 0.3,
+        "unit": "m",
+        "condition_field": "element_type",
+        "condition_operator": "==",
+        "condition_threshold": "beam",
+        "severity": "Medium",
+        "code_ref": "SS EN 1992",
+        "message": "Beam depth {value}m below constructional minimum {threshold}m. Increase beam depth."
+    },
+    {
+        "id": "STR-003",
+        "name": "Slab Minimum Thickness Check",
+        "description": "Cast-in-situ slab thickness must not fall below 100mm",
+        "field": "thickness_m",
+        "operator": ">=",
+        "threshold": 0.1,
+        "unit": "m",
+        "condition_field": "element_type",
+        "condition_operator": "==",
+        "condition_threshold": "slab",
+        "severity": "Low",
+        "code_ref": "SS EN 1992",
+        "message": "Slab thickness {value}m below required {threshold}m. Increase slab thickness."
     }
 ]
