@@ -287,7 +287,7 @@
               "source": "https://www.gov.cn/zhengce/zhengceku/2023-01/30/5739161/files/b1fb02d581bd4c2c866b488ea730c652.pdf",
               "file": "GB_55037-2022_建筑防火通用规范.pdf",
               "scope": "Fully mandatory. Since 2023-06-01 repeals most mandatory clauses of GB 50016 (fire compartment, evacuation, exits, fire lanes), GB 50067, etc.",
-              "notes": "Downloaded — official gov.cn PDF (66 pages, 65.7 MB). NOT on openstd.samr.gov.cn (that covers 国家标准, not 工程建设规范)."
+              "notes": "Downloaded — official gov.cn PDF (66 pages, 65.7 MB). OCR'd to GB_55037-2022_建筑防火通用规范.txt (36921 chars, scanned PDF has no text layer) via scripts/rag_kb/ocr_pdf.py. NOT on openstd.samr.gov.cn (that covers 国家标准, not 工程建设规范)."
             },
             {
               "id": "CN-GB55036",

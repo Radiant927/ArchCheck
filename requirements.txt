@@ -6,3 +6,9 @@ python-pptx>=0.6.21
 ifcopenshell
 openai
 anthropic
+
+# RAG knowledge base tooling (scripts/rag_kb/)
+pypdf
+pymupdf
+rapidocr_onnxruntime
+numpy
