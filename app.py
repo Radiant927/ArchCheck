@@ -20,6 +20,7 @@ from core.i18n import _room_type_label, _floor_label
 from core.engine import DEMO_DATA, run_full_review
 from bim.parser import parse_ifc, build_review_data
 import llm.client as llm
+from agents.reviewer import review_issues
 
 # ============================================================
 # PAGE CONFIG — must be first Streamlit call
@@ -384,6 +385,9 @@ if st.session_state.review_loading:
             )
 
         time.sleep(0.6)
+
+    # Independent Reviewer: verify each finding against the RAG corpus (no LLM loop)
+    review_issues(results["all_issues"])
 
     st.session_state.civil_results = results["civil_results"]
     st.session_state.eee_results = results["eee_results"]
@@ -925,6 +929,18 @@ elif st.session_state.page == "results":
         for i, iss in enumerate(issues, 1):
             sev = iss.get("severity", "Medium")
             sev_color = {"High": C["red"], "Medium": C["orange"], "Low": C["silver"], "Missing": C["silver"]}.get(sev, C["silver"])
+            review_badge = ""
+            if iss.get("review_status"):
+                if iss["review_status"] == "verified":
+                    review_badge = (f'<span style="display:inline-block;margin-left:6px;padding:1px 8px;'
+                                    f'border-radius:2px;font-size:12px;font-weight:600;'
+                                    f'background:{C["green"]}18;color:{C["green"]};">'
+                                    f'✅ {T["review_verified"]}</span>')
+                else:
+                    review_badge = (f'<span style="display:inline-block;margin-left:6px;padding:1px 8px;'
+                                    f'border-radius:2px;font-size:12px;font-weight:600;'
+                                    f'background:{C["orange"]}18;color:{C["orange"]};">'
+                                    f'⚠️ {T["review_manual"]}</span>')
             floor_tag = ""
             if show_floor and iss.get("floor_name"):
                 floor_tag = f'<span class="floor-tag">{_floor_label(iss["floor_name"])}</span>'
@@ -933,7 +949,7 @@ elif st.session_state.page == "results":
             st.markdown(f'''<div class="issue-card {css_class}">
             <div style="font-weight:700;font-size:15px;">{i}. {iss["title"]}
             <span style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:600;background:{sev_color}18;color:{sev_color};">{sev}</span>
-            {floor_tag}</div>
+            {review_badge}{floor_tag}</div>
             <div style="font-size:14px;color:{C["muted"]};margin-top:4px;">{iss.get("description","")}</div>
             <div style="font-size:13px;color:{C["silver"]};margin-top:4px;font-family:monospace;">{loc_label}: {iss.get("location","-")} | {ref_label}: {iss.get("code_ref","-")}</div>
             </div>''', unsafe_allow_html=True)

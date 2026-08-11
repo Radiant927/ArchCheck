@@ -29,13 +29,18 @@ def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, str
         for i, iss in enumerate(items, 1):
             sv = iss.get("severity", "Medium")
             sv_label, sc = sev_map.get(sv, ("?", "mid"))
+            rv = ""
+            if iss.get("review_status") == "verified":
+                rv = f'<span class="sev sev-low">✅ {t["review_verified"]}</span>'
+            elif iss.get("review_status") == "manual":
+                rv = f'<span class="sev sev-mid">⚠️ {t["review_manual"]}</span>'
             floor_info = ""
             if iss.get("floor_name"):
                 floor_info = f' · <span style="color:{C["silver"]};font-size:12px;">{iss["floor_name"]}</span>'
             out += (
                 f'<div class="card {cls}">'
                 f'<div class="title">{i}. {iss["title"]}'
-                f'<span class="sev sev-{sc}">{sv_label}</span>{floor_info}</div>'
+                f'<span class="sev sev-{sc}">{sv_label}</span>{rv}{floor_info}</div>'
                 f'<div class="desc">{iss.get("description","")}</div>'
                 f'<div class="meta">{t["report_loc"]}: {iss.get("location","-")} | {t["report_ref"]}: {iss.get("code_ref","-")}</div>'
                 f'</div>'
