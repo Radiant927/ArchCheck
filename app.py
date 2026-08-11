@@ -500,16 +500,11 @@ elif st.session_state.page == "upload":
             except Exception as ex:
                 st.error(f'{T["ifc_parse_fail"]}: {ex}')
             else:
-                if struct["total_rooms"] > 0:
-                    # real rooms parsed from the IFC
-                    bdata = build_review_data(struct)
-                else:
-                    # no spaces in the model — fall back to demo rooms per storey
-                    demo_floors = DEMO_DATA.get("floors", [])
-                    room_map = {f["name"]: demo_floors[i]["rooms"]
-                                for i, f in enumerate(struct["floors"]) if i < len(demo_floors)}
-                    bdata = build_review_data(struct, rooms_template=None, floor_room_map=room_map)
+                # rooms come from the IFC when present; otherwise empty (no fabrication)
+                bdata = build_review_data(struct)
                 st.session_state.building_data = bdata
+                if struct["total_rooms"] == 0:
+                    st.warning(T["ifc_no_rooms"])
                 first_rooms = bdata["floors"][0]["rooms"] if bdata.get("floors") else []
                 if first_rooms:
                     st.session_state.uploaded_image, _ = render_room_plan(
@@ -739,6 +734,9 @@ elif st.session_state.page == "results":
         unsafe_allow_html=True,
     )
     st.markdown(f'<div style="font-size:16px;color:{C["muted"]};margin-bottom:20px;">{T["results_sub"]}</div>', unsafe_allow_html=True)
+
+    if bdata.get("source") == "ifc" and sum(len(f.get("rooms", [])) for f in floors) == 0:
+        st.warning(T["ifc_no_rooms"])
 
     high = sum(1 for i in all_issues if i.get("severity") == "High")
 
