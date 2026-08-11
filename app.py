@@ -236,11 +236,14 @@ with st.sidebar:
         f'<div class="aicher-label" style="margin-bottom:8px;">{T["std_label"]}</div>',
         unsafe_allow_html=True,
     )
-    std_idx = 0 if st.session_state.standard == "cn" else 1
+    std_list = engine.list_standards()
+    std_ids = [s[0] for s in std_list]
+    std_metas = {s[0]: s[1] for s in std_list}
+    std_idx = std_ids.index(st.session_state.standard) if st.session_state.standard in std_ids else 0
     new_std = st.radio(
         "Standard",
-        options=["cn", "sg"],
-        format_func=lambda x: T["std_cn"] if x == "cn" else T["std_sg"],
+        options=std_ids,
+        format_func=lambda x: f'{std_metas.get(x, {}).get("flag","")} {std_metas.get(x, {}).get("short_name", x)}',
         index=std_idx,
         label_visibility="collapsed",
         key="std_radio",
@@ -699,8 +702,9 @@ elif st.session_state.page == "results":
     all_issues = st.session_state.get("all_issues", [])
     bdata = st.session_state.get("building_data") or DEMO_DATA
 
-    # Compute diff against the other standard for the standard-switching summary
-    other_std_id = "sg" if st.session_state.standard == "cn" else "cn"
+    # Compute diff against another standard for the standard-switching summary
+    _others = [s for s in std_ids if s != st.session_state.standard]
+    other_std_id = _others[0] if _others else st.session_state.standard
     other_std = engine.load_standard(other_std_id)
     other_results = engine.run_review_with_standard(other_std_id, bdata)
 

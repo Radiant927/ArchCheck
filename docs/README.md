@@ -103,11 +103,15 @@ Supported operators: `<=`, `>=`, `>`, `<`, `==`, `!=`, `in`, `not_in`. Rules sup
 
 ## Adding a New Standard
 
-1. Create `data/standards/<code>/meta.json`
-2. Add `civil_rules.json`, `eee_rules.json`, `building_rules.json` with the same schema
-3. Add the standard ID to the sidebar radio in `app.py`
+Adding a standard is a **config-only** change — drop a folder and it appears in
+the sidebar automatically (scanned from `data/standards/`):
 
-No engine code changes needed.
+1. Create `data/standards/<code>/meta.json` (`id`, `name`, `short_name`, `flag`, `language`, `civil_codes`, `eee_codes`)
+2. Add rule packs with the shared schema: `civil_rules.json`, `eee_rules.json`,
+   `building_rules.json`, and optional `structural_rules.json`
+3. Rules may add a `dynamic_threshold` block (formula → RAG/LLM → fallback)
+
+No engine or `app.py` code changes needed.
 
 ## Demo Boundaries
 

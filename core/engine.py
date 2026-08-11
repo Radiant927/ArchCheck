@@ -29,6 +29,27 @@ def load_standard(standard_id):
                 pass
     return result
 
+def list_standards():
+    """[(id, meta)] for every standard directory under data/standards/.
+
+    Adding a new standard is a config-only change: drop data/standards/<code>/
+    with meta.json + rule files and it appears in the sidebar automatically.
+    """
+    out = []
+    if DATA.exists():
+        for d in sorted((DATA / "standards").glob("*")):
+            if not d.is_dir():
+                continue
+            meta = {}
+            mp = d / "meta.json"
+            if mp.exists():
+                try:
+                    meta = json.loads(mp.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            out.append((d.name, meta))
+    return out
+
 def load_demo_data():
     p = DATA / "demo_building_data.json"
     if p.exists():
