@@ -1,7 +1,7 @@
 # ArchCheck V2.0 项目总览
 
 > AI 多层建筑合规审查平台 — 角色化多 Agent 架构 · 多专业审查 · BIM/IFC 输入 · RAG 知识库
-> 更新日期：2026-08-13（Office 3F 补全建筑构件：墙/板/梁柱/窗/楼梯/屋顶 · QA 100）
+> 更新日期：2026-08-27（规则扩至 47 条/地区 + 6 专业 · 缺字段诚实上报 · B-Rep 调研结论 · 公寓推理演示）
 
 ---
 
@@ -10,7 +10,7 @@
 ArchCheck 是一个面向**多层建筑**的规范合规自动审查平台。核心价值：把设计师交付的 **BIM（IFC）模型**中所有建筑信息读取、校验、判定，并给出**带规范依据**的审查报告。
 
 - **输入**：IFC（BIM）文件（真实模型或自建样例）
-- **输出**：模型可用性报告 + 分专业（消防/电气/结构/无障碍）审查结果 + 生成平面图（3D/俯视/剖面）+ HTML/Excel 报告
+- **输出**：模型可用性报告 + 分专业（消防/机电/电气/结构/全楼/无障碍）审查结果 + 生成平面图（3D/俯视/剖面）+ HTML/Excel/BCF/COBie 报告
 - **标准**：CN GB ↔ SG Fire Code 2023 一键切换（双语 UI），可配置扩展
 - **数据诚实**：审查基于模型真实数据；房间类型不知道标 Unknown，参数标 🟢来自模型 / 🟠默认·待填写
 
@@ -25,8 +25,8 @@ IFC 上传
 ① BIM Reader       解析 IFC + 模型可用性 QA（健康度评分 0-100，致命问题阻断）
   │
   ▼
-② Compliance Judge 确定性判定：消防/电气/结构/无障碍 四专业，多标准规则包
-  │                    值 vs 阈值 · 动态阈值（公式/LLM）· 跨楼层聚合 · 冲突检测
+② Compliance Judge 确定性判定：消防/机电/电气/结构/全楼/无障碍 六专业，多标准规则包
+  │                    值 vs 阈值 · 动态阈值（公式/LLM）· 跨楼层聚合 · 冲突检测 · 缺字段诚实上报
   ▼
 ⑤ Independent Reviewer   检索 RAG 规范原文复核判定 → ✅已复核 / ⚠️待人工复核 + 证据
   │
@@ -39,7 +39,7 @@ IFC 上传
 | Agent | 职责 | 代码 | 是否确定性 |
 |---|---|---|---|
 | ① BIM Reader | IFC 解析 + 模型可用性 QA | `bim/parser.py` + `bim/extractor.py` + `bim/qa_validator.py` | ✅ 确定性 |
-| ② Compliance Judge | 四专业规则判定 | `core/engine.py` | ✅ 确定性 |
+| ② Compliance Judge | 六专业规则判定 | `core/engine.py` | ✅ 确定性 |
 | ③ KB Steward | 规范 RAG、动态阈值、规则生成 | `kb/steward.py` + `data/rag_kb/` | 混合（检索确定性，生成用 LLM） |
 | ④ Reasoner | 审查叙述、冲突协调 | `llm/client.py` | LLM |
 | ⑤ Independent Reviewer | 规范原文复核（**概念保留，结果页不显示**） | `agents/reviewer.py` | ✅ 确定性 |
@@ -53,11 +53,12 @@ IFC 上传
 - 模型 QA 四项：长度单位、空间完整性、几何有效性、空间边界引用
 - **健康度评分（0-100）** + 致命问题阻断（空壳/无几何/无楼层）
 
-### 3.2 Compliance Judge — 四专业判定
-- 规则引擎：8 操作符 + 条件过滤 + 跨楼层聚合 + 冲突检测
-- 规则包：`data/standards/{cn,sg}/{civil,eee,building,structural}_rules.json`
+### 3.2 Compliance Judge — 六专业判定
+- 规则引擎：8 操作符 + 条件过滤 + **规则 scope 分发** + 跨楼层聚合 + 冲突检测
+- 规则包：`data/standards/{cn,sg}/{civil,mep,eee,structural,building,accessibility}_rules.json` —— **各地区 47 条**（消防疏散 13 / 机电 10 / 电气 6 / 结构 4 / 全楼 9 / 无障碍 5）
+- **缺字段诚实上报（coverage）**：模型没有规则要的字段时报"未检查（缺字段 X）"并按规则聚合，不静默跳过；模型补上字段即自动激活判定
 - **动态阈值**：`dynamic_threshold` 规则字段，公式（如梁高 max(0.2, min(span,6)/20)）→ RAG/LLM → 静态回退，按规则+上下文缓存
-- 真实数据：疏散距离（房间邻接图+Dijkstra）、门宽、出口数、柱/梁/板截面、坡道坡度
+- 真实数据：疏散距离（房间邻接图+Dijkstra）、房间最远点疏散距离（几何采样）、门宽、出口数、柱/梁/板截面、坡道坡度、竖向排水管径
 
 ### 3.3 KB Steward — 规范知识库
 - RAG 语料：`data/rag_kb/`（免费核心全文 + 付费标准索引）
@@ -85,6 +86,8 @@ IFC 上传
 |---|---|---|---|
 | FZK Haus | 真实（ArchiCAD） | 2 层 / 7 房间 | 含空间边界（精确门关联），健康度 100 |
 | **Office 3F** | 合成（自建） | 3 层 / 24 房间 | 完整办公楼（墙/板/梁柱/窗/楼梯/屋顶），占地 323m²、门宽 0.9、QA 100，管线回归用 |
+| **Duplex MEP** | 真实（buildingSMART） | 42 房间 / 82 电气 / 427 管道 | 机电最密的样例，电气 4 条规则 + 机电 5 条规则全触发 |
+| **Schependomlaan** | 真实（荷兰住宅） | 6 层 / 100 房间 / 60 管道 | 934 墙 / 205 门 / 结构 178 构件；混合单位样例；**公寓推理演示与 B-Rep 调研主用**（4202 IfcFacetedBrep）|
 | Snowdon Towers | 真实 | 18 层 / 155 空间 / 132 门 | 无空间边界（几何兜底），健康度 80 |
 | IfcOpenHouse | 真实 | 1 层结构壳 | 无房间，验证降级路径 |
 
@@ -114,10 +117,11 @@ CN GB ↔ SG FC23，**配置化扩展**（丢 `data/standards/<code>/` 文件夹
 ```
 上传 IFC + 选标准
   → ① 模型可用性 QA（健康度 + 阻断）
-  → ② 四专业逐层判定（消防/电气逐房间，结构逐构件，整楼聚合）
+  → ② 六专业逐层判定（消防/无障碍逐房间，电气逐设备，结构逐构件，机电逐管道风管，整楼聚合）
+  → 缺字段规则转"未检查（缺字段 X）"上报
   → 冲突检测（同层同位置跨专业）
   → ④ LLM 审查叙述
-  → 结果页：统计卡 + 双栏（判定列表 + 3D/俯视平面图）+ 专业筛选 + HTML/Excel 导出
+  → 结果页：统计卡 + 双栏（判定列表 + 3D/俯视平面图）+ 专业筛选 + 未检查规则展开器 + HTML/Excel/BCF/COBie 导出
 ```
 
 ## 7. 已知边界（如实）
@@ -128,10 +132,13 @@ CN GB ↔ SG FC23，**配置化扩展**（丢 `data/standards/<code>/` 文件夹
 4. **启发式局限**：FZK 楼板占地=0（非矩形拉伸）；部分模型门宽靠名称/几何回退；曲面片矩形楼板占地已解析（office_3f = 323m²）
 5. **固定构造阈值**：STR-002 梁高公式 `max(0.2, min(span,6)/20)` 是工程近似（决策文档 `docs/STR002_rule_decision_request.md`），STR-003 板厚用静态 0.1m（混合板型更稳）
 6. **付费标准无全文**：涉及付费标准（GB 500xx / SS 638 等）的判定，系统无法自动给出规范原文证据，需人工对照原文确认（复核显示已从结果页移除，概念单独讲）
+7. **规则库全量但字段不全**：47 条规则里 4 样例累计只触发 27 条，余 20 条停在"未检查（缺字段）"。稀有属性（照度 `illuminance_lx`、耐火 `fire_rated`、疏散指示灯具）在公开样例里根本不存在，系统不构造默认值——宁可"未检查"，不假通过
+8. **几何近似口径**：管径由 bbox 量取（非壁厚精确值），`has_sprinkler` 由消防管近邻近似，`max_room_travel_dist_m` 由凸包顶点 + 粗网格采样（非真实寻路），均在规则 description 里标注需复核
 
 ## 8. 验证记录
 
-- 引擎端到端：FZK / **Office 3F** / Snowdon / IfcOpenHouse 解析 + 四专业审查
+- 引擎端到端：FZK / **Office 3F** / **Duplex MEP** / **Schependomlaan** / Snowdon / IfcOpenHouse 解析 + 六专业审查
+- 六专业 47 条规则实测（CN）：FZK 22 问题/13 规则、office_3f 21/11、Duplex 357/19、Schependomlaan 383/15；未检查条目分别 12/12/16/14，每条都注明缺哪个字段
 - 红线预警：门宽 0.8m 违规、柱截面 0.101m 违规、梁/板真实数据判定
 - 动态阈值：STR-002 主梁 0.24m 通过（阈值 0.204）、檩条 0.16m 报（阈值 0.30）
 - AppTest 完整流程 0 异常（上传 FZK/Office 3F → 健康度 → 平面图 → 审查 → 结果页）
@@ -153,15 +160,19 @@ streamlit run app.py    # http://localhost:8501
 - `scripts/rag_kb/cleaning_rules.py` 过期引用清洗
 - `scripts/rag_kb/generate_rules_from_rag.py` 条文 → JSON 规则
 - `scripts/generate_office_ifc.py` 生成 Office 3F 样例
+- `scripts/brep_analysis.py` B-Rep 实体计数 + 表示类型分布 + 组件统计（几何路线决策依据）
+- `scripts/demo_reasoning.py` 公寓模型知识库推理演示（提问→语义检索→条文证据→规则判定→结果）
 
 ## 10. 路线图
 
-**已完成**：Agent ①-⑤ 全链路、四专业审查、动态阈值、标准配置化、RAG 知识库、**结果页 V2.1（双栏/3D 视图/筛选）**、数据诚实化（Unknown 类型/来源标注）、**Office 3F 样例**、去快速演示。
+**已完成**：Agent ①-⑤ 全链路、**六专业审查（47 条/地区）+ 缺字段诚实上报**、动态阈值、标准配置化、RAG 知识库 + 语义检索、**结果页 V2.1（双栏/3D 视图/筛选）**、数据诚实化（Unknown 类型/来源标注）、**Office 3F 样例**、**Duplex/Schependomlaan 真实样例接入**、**BCF 2.1 + COBie 导出**、**B-Rep 调研结论（不自研 CSG 内核）**、**公寓推理演示 5 场景**。
 
 **待办/未来**：
-- [ ] Reviewer 证据定位到具体条款（语义检索）
+- [ ] IDS 驱动模型质检（把"缺字段"从"我们判不了"变成"模型不合交付规范"）
+- [ ] Duplex 房间-门关联失败导致疏散距离算不出（0/42），待修
+- [ ] 余 20 条规则的字段来源（无障碍 5 条、消火栓间距、消防电梯等）
+- [ ] 误报率金标准量化（人工标注缺陷样例集）
 - [ ] Snowdon 解析提速（几何缓存/并发）
 - [ ] 动态阈值推广到更多规则（需工程公式决策）
 - [ ] 更多标准（ASEAN/EU）规则包
-- [ ] 补更多真实样例（Duplex/Schependomlaan）
-- [ ] 完整演示流程核对（office_3f + FZK）
+- [ ] 完整演示流程核对（office_3f + FZK + Schependomlaan）
