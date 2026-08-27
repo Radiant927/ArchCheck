@@ -153,11 +153,14 @@
   {
     "id": "CIVIL-013",
     "name": "公共建筑房间喷淋覆盖检查",
-    "description": "公共建筑内超过面积阈值的房间应设自动喷水（待提取 has_sprinkler 字段）",
+    "description": "面积超过 50m² 的房间应设自动喷水（has_sprinkler 由消防管近邻近似，需复核）",
     "scope": "room",
     "field": "has_sprinkler",
     "operator": "==",
     "threshold": true,
+    "condition_field": "room_area_sqm",
+    "condition_operator": ">",
+    "condition_threshold": 50,
     "severity": "Medium",
     "code_ref": "GB 50016",
     "message": "{room_name} 未设自动喷水灭火，应评估是否需增设。"
@@ -165,11 +168,14 @@
   {
     "id": "CIVIL-014",
     "name": "疏散指示标志检查",
-    "description": "疏散走道和出口处应设置疏散指示标志（待提取 has_exit_sign 字段）",
+    "description": "疏散走道和楼梯间应设置疏散指示标志（has_exit_sign 由房间内疏散指示灯具判定）",
     "scope": "room",
     "field": "has_exit_sign",
     "operator": "==",
     "threshold": true,
+    "condition_field": "type",
+    "condition_operator": "in",
+    "condition_threshold": ["Stairwell", "Corridor"],
     "severity": "Medium",
     "code_ref": "GB 51309",
     "message": "{room_name} 疏散路径未设置疏散指示标志。"

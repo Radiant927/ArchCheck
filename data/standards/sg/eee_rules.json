@@ -59,23 +59,9 @@
         "message": "Outlet {room_name} spacing {value}m exceeds advisory guideline {threshold}m. Additional outlets recommended based on point-of-use assessment."
     },
     {
-        "id": "EEE-007",
-        "name": "Exit Sign Check (equipment)",
-        "description": "Luminaires shall include exit-sign functionality (awaits has_exit_sign field)",
-        "field": "has_exit_sign",
-        "operator": "==",
-        "threshold": true,
-        "severity": "Medium",
-        "condition_field": "equipment_type",
-        "condition_operator": "==",
-        "condition_threshold": "lighting",
-        "code_ref": "SS 563",
-        "message": "{room_name} luminaire lacks exit-sign functionality."
-    },
-    {
         "id": "EEE-008",
         "name": "Emergency Lighting Minimum Illuminance",
-        "description": "Minimum illuminance on escape routes shall not be below 1 lx (awaits illuminance_lx field)",
+        "description": "Minimum illuminance on escape routes shall not be below 1 lx (awaits model-provided illuminance_lx field)",
         "field": "illuminance_lx",
         "operator": ">=",
         "threshold": 1,

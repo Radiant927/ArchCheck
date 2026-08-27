@@ -234,8 +234,13 @@ def _pipe_data(e, scale, settings):
         slope = _real if _real is not None else _pipe_slope_from_geom(e, settings)
     if slope is not None:
         slope = round(float(slope), 3)
-    return {"name": e.Name or e.GlobalId, "pipe_type": pipe_type,
-            "diameter_m": diameter, "slope": slope, "length_m": length}
+    out = {"name": e.Name or e.GlobalId, "pipe_type": pipe_type,
+           "diameter_m": diameter, "slope": slope, "length_m": length}
+    # drainage stack diameter: only for geometrically-vertical drainage runs
+    # (z-extent dominant), so a horizontal branch isn't mistaken for a stack.
+    if pipe_type == "drainage" and d and d[2] > max(d[0], d[1]) * 1.5:
+        out["vertical_drain_diameter_m"] = round(min(d[0], d[1]), 3)
+    return out
 
 
 def _duct_data(e, scale, settings):
@@ -302,11 +307,23 @@ def _electrical_equipment(els, room_type_map):
                 m = re.search(r"(\d+(?:\.\d+)?)\s*w\b", nm)
                 if m:
                     d["power_w"] = float(m.group(1))
+            # rare fields: only set when a value actually exists, so a model that
+            # lacks them reports a clean "未检查（缺字段）" instead of a Missing
+            # flood on every element.
+            if _pset_value(e, "ArchCheckEEEEquip", "has_exit_sign") or \
+               any(k in nm for k in ("exit sign", "exit", "疏散指示", "出口指示")):
+                d["has_exit_sign"] = True
+            _illum = _pset_value(e, "ArchCheckEEEEquip", "illuminance_lx")
+            if _illum is not None:
+                d["illuminance_lx"] = _illum
         elif et == "socket":
             d["outlet_spacing_m"] = _pset_value(e, "ArchCheckEEEEquip", "outlet_spacing_m")
         elif et == "distribution":
             d["circuit_load_a"] = _pset_value(e, "ArchCheckEEEEquip", "circuit_load_a")
             d["dist_to_water_m"] = _pset_value(e, "ArchCheckEEEEquip", "dist_to_water_m")
+            if _pset_value(e, "ArchCheckEEEEquip", "fire_rated") or \
+               any(k in nm for k in ("fire rated", "耐火")):
+                d["fire_rated"] = True
         out.append(d)
     return out
 
@@ -973,7 +990,54 @@ def _classify_room_type(name):
     return "Unknown"
 
 
-def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, hull=None):
+def _max_room_travel(room_door_centroids, hull, scale):
+    """Farthest-point egress distance (m): max over points in the room of the
+    min distance to its exit doors. Approximated by sampling the hull vertices
+    plus a coarse interior grid — exact farthest-point-in-polygon is a Voronoi
+    computation we don't need at this precision."""
+    if not hull or not room_door_centroids:
+        return None
+    xs = [p[0] for p in hull]
+    ys = [p[1] for p in hull]
+    minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+    cand = list(hull)
+    step = max(maxx - minx, maxy - miny) / 8
+    if step < 0.1:
+        step = 0.1
+    y = miny
+    while y <= maxy + 1e-9:
+        x = minx
+        while x <= maxx + 1e-9:
+            if _point_in_poly((x, y), hull):
+                cand.append((x, y))
+            x += step
+        y += step
+    best = 0.0
+    for px, py in cand:
+        dmin = min(((px - qx) ** 2 + (py - qy) ** 2) ** 0.5 for qx, qy in room_door_centroids)
+        if dmin > best:
+            best = dmin
+    return round(best * scale, 2)
+
+
+def _building_fire_stats(m):
+    """(fire_elevator_count, fire_extinguisher_count) counted from raw elements."""
+    elev = 0
+    for e in m.by_type("IfcTransportElement"):
+        pt = getattr(e, "PredefinedType", None)
+        nm = (e.Name or "").lower()
+        if pt == "ELEVATOR" or any(k in nm for k in ("lift", "elevator", "电梯")):
+            elev += 1
+    ext = 0
+    for e in m.by_type("IfcFurnishingElement"):
+        nm = (e.Name or "").lower()
+        if "exting" in nm or "灭火" in (e.Name or ""):
+            ext += 1
+    return elev, ext
+
+
+def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, hull=None,
+                   max_room_travel=None, has_sprinkler=None):
     """Build a review-engine room dict from a real IfcSpace.
 
     exit_count and door_width_m come from the real doors associated with the
@@ -982,6 +1046,9 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
     with no doors (exit_count 0). travel_distance is the computed egress path
     (m) to the nearest exit room, feeding corridor_length_m. hull (if any) is
     the room's footprint polygon in model units, used to draw a real floor plan.
+    max_room_travel / has_sprinkler are honest supplements: the former is the
+    computed farthest-point egress distance, the latter a fire-pipe proximity
+    proxy (None when the floor has no fire pipe to assess against).
     """
     name = space.Name or "?"
     rtype = _classify_room_type(f"{ref} {name}")
@@ -1014,6 +1081,8 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
         "outlet_spacing_m": float(outlet) if outlet is not None else 5.0,
         "eee_src": eee_src,
         "corridor_length_m": travel_distance or 0,
+        "max_room_travel_dist_m": max_room_travel,
+        "has_sprinkler": has_sprinkler,
         "hull": hull,
     }
 
@@ -1215,6 +1284,16 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         sized = sorted(spaces, key=lambda s: -(space_geom.get(s.GlobalId, (None, 0.0))[1]))
         if max_rooms_per_floor:
             sized = sized[:max_rooms_per_floor]
+        # exit-sign fixtures: a room "has an exit sign" if a fixture named as one
+        # is associated with it (matching by room ref).
+        exit_sign_rooms = {el.get("room") for el in electrical if el.get("has_exit_sign")}
+        # fire-pipe segments for the sprinkler-coverage proximity proxy
+        fire_segs = []
+        for e, pipe in zip(pipe_elems, pipes):
+            if pipe.get("pipe_type") == "fire":
+                seg = _pipe_segment(e, geom_settings)
+                if seg:
+                    fire_segs.append(seg)
         rooms = []
         for s in sized:
             _sg = space_geom.get(s.GlobalId, (None, 0.0, None))
@@ -1222,8 +1301,26 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
             widths = None
             if door_meta:  # model has doors: report real per-room door data
                 widths = [door_meta[g] for g in door_room.get(s.GlobalId, set()) if g in door_meta]
-            rooms.append(_space_to_room(s, area, ref_map.get(s.GlobalId, ""), widths,
-                                        travel.get(s.GlobalId), _sg[0]))
+            _hull = _sg[0]
+            _doors = [door_geom[g][1] for g in door_room.get(s.GlobalId, set())
+                      if g in door_geom and door_geom[g][1]]
+            _mrt = _max_room_travel(_doors, _hull, scale)
+            _cent = _sg[2]
+            _spr = None
+            if fire_segs and _cent:
+                _near = min(_dist_pt_seg((_cent[0], _cent[1]), a, b) for a, b in fire_segs)
+                _spr = bool(_near <= 2.0)
+            room = _space_to_room(s, area, ref_map.get(s.GlobalId, ""), widths,
+                                  travel.get(s.GlobalId), _hull, _mrt, _spr)
+            # unknown values are left absent (-> clean "未检查（缺字段）" coverage)
+            # rather than a None that floods "数据缺失" per room.
+            if _mrt is None:
+                room.pop("max_room_travel_dist_m", None)
+            if _spr is None:
+                room.pop("has_sprinkler", None)
+            if exit_sign_rooms:
+                room["has_exit_sign"] = (s.Name or "?") in exit_sign_rooms
+            rooms.append(room)
 
         floors.append({
             "name": storey.Name or "?",
@@ -1260,6 +1357,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         })
 
     footprint = max((f["footprint_area_sqm"] for f in floors), default=0.0)
+    fire_elevators, fire_extinguishers = _building_fire_stats(m)
     return {
         "source": "ifc",
         "file_name": Path(path).name,
@@ -1267,6 +1365,8 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         "storey_count": len(floors),
         "building_footprint_area_sqm": footprint,
         "total_rooms": sum(len(f["rooms"]) for f in floors),
+        "building_fire_stats": {"fire_elevators": fire_elevators,
+                                "fire_extinguishers": fire_extinguishers},
         "floors": floors,
     }
 
@@ -1300,6 +1400,12 @@ def build_review_data(struct, rooms_template=None, floor_room_map=None):
         })
     all_ramp_slopes = [s for f in struct.get("floors", [])
                        for s in (f.get("structure") or {}).get("ramp_slopes", [])]
+    stats = struct.get("building_fire_stats") or {}
+    any_fire_pipe = any(p.get("pipe_type") == "fire"
+                        for f in struct.get("floors", []) for p in f.get("pipes", []))
+    any_fire_alarm = any(
+        any(k in (el.get("name") or "").lower() for k in ("alarm", "smoke", "感烟", "报警"))
+        for f in struct.get("floors", []) for el in f.get("electrical_elements", []))
     bp = {
         "total_floors": struct.get("storey_count", len(floors)),
         "occupancy_type": "office",
@@ -1307,6 +1413,10 @@ def build_review_data(struct, rooms_template=None, floor_room_map=None):
         "fire_pool_volume_m3": 160.0,
         "transformer_capacity_kw": 650.0,
         "emergency_power_duration_min": 60.0,
+        "fire_elevator_count": stats.get("fire_elevators", 0),
+        "fire_extinguisher_count": stats.get("fire_extinguishers", 0),
+        "has_sprinkler_system": any_fire_pipe,
+        "has_fire_alarm": any_fire_alarm,
     }
     if all_ramp_slopes:
         bp["max_ramp_slope"] = max(all_ramp_slopes)

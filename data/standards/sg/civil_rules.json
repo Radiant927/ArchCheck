@@ -153,11 +153,14 @@
   {
     "id": "CIVIL-013",
     "name": "Sprinkler Coverage Check",
-    "description": "Rooms over area threshold in public buildings shall be sprinkler-protected (awaits has_sprinkler field)",
+    "description": "Rooms over 50 m² in public buildings shall be sprinkler-protected (has_sprinkler approximated from nearby fire pipe; verify)",
     "scope": "room",
     "field": "has_sprinkler",
     "operator": "==",
     "threshold": true,
+    "condition_field": "room_area_sqm",
+    "condition_operator": ">",
+    "condition_threshold": 50,
     "severity": "Medium",
     "code_ref": "FC23",
     "message": "{room_name} has no sprinkler protection; assess whether it is required."
@@ -165,11 +168,14 @@
   {
     "id": "CIVIL-014",
     "name": "Exit Sign Check",
-    "description": "Escape corridors and exits shall be provided with exit signs (awaits has_exit_sign field)",
+    "description": "Stairwells and corridors on escape routes shall have exit signs (has_exit_sign from exit-sign luminaires in the room)",
     "scope": "room",
     "field": "has_exit_sign",
     "operator": "==",
     "threshold": true,
+    "condition_field": "type",
+    "condition_operator": "in",
+    "condition_threshold": ["Stairwell", "Corridor"],
     "severity": "Medium",
     "code_ref": "SS 563",
     "message": "{room_name} escape route lacks exit signage."

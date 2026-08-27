@@ -59,23 +59,9 @@
         "message": "{room_name} 插座间距过大（实际 {value}m > 限值 {threshold}m），需增设插座。"
     },
     {
-        "id": "EEE-007",
-        "name": "疏散指示标志检查（设备级）",
-        "description": "灯具应附疏散指示功能（待提取 has_exit_sign 字段）",
-        "field": "has_exit_sign",
-        "operator": "==",
-        "threshold": true,
-        "severity": "Medium",
-        "condition_field": "equipment_type",
-        "condition_operator": "==",
-        "condition_threshold": "lighting",
-        "code_ref": "GB 51309",
-        "message": "{room_name} 灯具未配置疏散指示标志功能。"
-    },
-    {
         "id": "EEE-008",
         "name": "应急照明最低照度检查",
-        "description": "疏散走道应急照明地面最低照度不应低于 1 lx（待提取 illuminance_lx 字段）",
+        "description": "疏散走道应急照明地面最低照度不应低于 1 lx（待模型提供 illuminance_lx 字段）",
         "field": "illuminance_lx",
         "operator": ">=",
         "threshold": 1,
