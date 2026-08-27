@@ -37,6 +37,11 @@ output/*.pdf
 output/*.html
 output/*.ifc
 output/*.jpg
+output/*.csv
+output/*.bcf
+
+# Local run logs
+.tmp_streamlit.log
 
 # Jupyter
 .ipynb_checkpoints/
