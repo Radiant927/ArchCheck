@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 from core.config import C
-from core.i18n import LANG, T, _floor_label
+from core import i18n
+from core.i18n import _floor_label
 
 FP_X1, FP_Y1 = 30, 80
 
@@ -80,7 +81,7 @@ def _draw_floor_plan(draw, W, H, variant=0):
             (FP_X1+20, FP_Y1+710, FP_X2-20, FP_Y2-20, ("Corridor", "走廊"), "corridor"),
         ]
 
-    is_zh = LANG == "zh"
+    is_zh = i18n.LANG == "zh"
     room_rects = {}
     for rx1, ry1, rx2, ry2, label, rtype in rooms:
         fc = ROOM_COLORS[rtype]
@@ -117,7 +118,7 @@ def _draw_info_panel(draw, W, H, floor_label=""):
     px = 1270
     ly = FP_Y1
     draw.rectangle([px, ly, W-30, ly+200], fill=(255,255,255), outline=(200,205,210), width=2)
-    legend_title = "图例" if LANG == "zh" else "LEGEND"
+    legend_title = "图例" if i18n.LANG == "zh" else "LEGEND"
     draw.text((px+16, ly+10), legend_title, fill=(40,45,55), font=fm)
     items = [
         (("Office / Meeting", "办公/会议"), ROOM_COLORS["office"]),
@@ -128,14 +129,14 @@ def _draw_info_panel(draw, W, H, floor_label=""):
     for i, (lb, cl) in enumerate(items):
         yy = ly + 46 + i*30
         draw.rectangle([px+16, yy, px+46, yy+22], fill=cl, outline=(180,185,190))
-        draw.text((px+56, yy), lb[1] if LANG=="zh" else lb[0], fill=(40,45,55), font=fs)
+        draw.text((px+56, yy), lb[1] if i18n.LANG=="zh" else lb[0], fill=(40,45,55), font=fs)
     fz_y = ly + 220
     if floor_label:
         draw.text((px+16, fz_y), floor_label, fill=C["blue"], font=fm)
-    fz1_label = "防火分区1" if LANG=="zh" else "Fire Zone 1"
-    fz2_label = "防火分区2" if LANG=="zh" else "Fire Zone 2"
+    fz1_label = "防火分区1" if i18n.LANG=="zh" else "Fire Zone 1"
+    fz2_label = "防火分区2" if i18n.LANG=="zh" else "Fire Zone 2"
     draw.text((px+16, fz_y+34), fz1_label, fill=C["blue"], font=fs)
-    draw.text((px+16, fz_y+58), T["sprinklered"], fill=C["silver"], font=fs)
+    draw.text((px+16, fz_y+58), i18n.T["sprinklered"], fill=C["silver"], font=fs)
     draw.text((px+16, fz_y+80), fz2_label, fill=C["silver"], font=fs)
     sy = H - 50
     draw.line([(px, sy), (px+200, sy)], fill=(40,45,55), width=4)
@@ -153,7 +154,7 @@ def generate_sample_image(floor_name="", variant=0):
     img = Image.new("RGB", (W, H), (250, 251, 252))
     draw = ImageDraw.Draw(img)
     ft, fm, fs = _load_fonts((36, 28, 22))
-    plan_label = "楼层平面图" if LANG == "zh" else "FLOOR PLAN"
+    plan_label = "楼层平面图" if i18n.LANG == "zh" else "FLOOR PLAN"
     title = f"{plan_label}  —  {floor_name}" if floor_name else f"{plan_label}  —  Office Building"
     draw.rectangle([0, 0, W, 70], fill=(30, 35, 45))
     draw.text((40, 12), title, fill=(240, 245, 250), font=ft)
@@ -183,12 +184,12 @@ def annotate_image(image, issues):
 
 def _fix_map():
     return {
-        "CIVIL-001": T["fix_civ001"], "CIVIL-002": T["fix_civ002"],
-        "CIVIL-003": T["fix_civ003"], "CIVIL-004": T["fix_civ004"],
-        "EEE-001": T["fix_eee001"], "EEE-002": T["fix_eee002"],
-        "EEE-003": T["fix_eee003"], "EEE-004": T["fix_eee004"],
-        "BLD-001": T["fix_bld001"], "BLD-002": T["fix_bld002"],
-        "BLD-003": T["fix_bld003"], "BLD-004": T["fix_bld004"],
+        "CIVIL-001": i18n.T["fix_civ001"], "CIVIL-002": i18n.T["fix_civ002"],
+        "CIVIL-003": i18n.T["fix_civ003"], "CIVIL-004": i18n.T["fix_civ004"],
+        "EEE-001": i18n.T["fix_eee001"], "EEE-002": i18n.T["fix_eee002"],
+        "EEE-003": i18n.T["fix_eee003"], "EEE-004": i18n.T["fix_eee004"],
+        "BLD-001": i18n.T["fix_bld001"], "BLD-002": i18n.T["fix_bld002"],
+        "BLD-003": i18n.T["fix_bld003"], "BLD-004": i18n.T["fix_bld004"],
     }
 
 
@@ -264,7 +265,35 @@ ROOM_TYPE_FILL = {
 }
 
 
-def render_room_plan(rooms, floor_name=""):
+def _draw_plan_elements(draw, elements, minx, miny, scale, ox, oy):
+    """Overlay physical-element footprints (walls/columns/windows) on a plan."""
+    for el in elements:
+        x0, y0, x1, y1 = el["bbox"][:4]
+        kind = el["kind"]
+        sx0 = ox + (x0 - minx) * scale; sy0 = oy + (y0 - miny) * scale
+        sx1 = ox + (x1 - minx) * scale; sy1 = oy + (y1 - miny) * scale
+        if kind == "wall":
+            draw.rectangle([sx0, sy0, sx1, sy1], fill=(56, 62, 74),
+                           outline=(34, 38, 46), width=2)
+        elif kind == "column":
+            cx = (sx0 + sx1) / 2; cy = (sy0 + sy1) / 2
+            r = max(2.0, min(abs(sx1 - sx0), abs(sy1 - sy0)) / 2)
+            draw.rectangle([cx - r, cy - r, cx + r, cy + r], fill=(98, 106, 120),
+                           outline=(34, 38, 46), width=2)
+        elif kind == "window":
+            if abs(sx1 - sx0) >= abs(sy1 - sy0):
+                draw.line([sx0 + 4, (sy0 + sy1) / 2, sx1 - 4, (sy0 + sy1) / 2],
+                          fill=(74, 138, 200), width=4)
+            else:
+                draw.line([(sx0 + sx1) / 2, sy0 + 4, (sx0 + sx1) / 2, sy1 - 4],
+                          fill=(74, 138, 200), width=4)
+        elif kind == "pipe":
+            draw.line([sx0, sy0, sx1, sy1], fill=(52, 120, 168), width=3)
+        elif kind == "duct":
+            draw.line([sx0, sy0, sx1, sy1], fill=(124, 92, 168), width=3)
+
+
+def render_room_plan(rooms, floor_name="", plan_elements=None):
     """Draw a data-driven floor plan: rooms packed by area (treemap), labeled.
 
     Returns (PIL image, room_map) where room_map maps room name -> (cx, cy).
@@ -273,7 +302,7 @@ def render_room_plan(rooms, floor_name=""):
     img = Image.new("RGB", (W, H), (250, 251, 252))
     draw = ImageDraw.Draw(img)
     ft, fm, fs = _load_fonts((36, 28, 22))
-    plan_label = "楼层平面图" if LANG == "zh" else "FLOOR PLAN"
+    plan_label = "楼层平面图" if i18n.LANG == "zh" else "FLOOR PLAN"
     title = f"{plan_label}  —  {_floor_label(floor_name)}" if floor_name else plan_label
     draw.rectangle([0, 0, W, 70], fill=(30, 35, 45))
     draw.text((40, 12), title, fill=(240, 245, 250), font=ft)
@@ -282,23 +311,31 @@ def render_room_plan(rooms, floor_name=""):
     aw, ah = dx2 - dx1, dy2 - dy1
     room_map = {}
     if not rooms:
-        draw.text((dx1, dy1 + 40), "无房间数据" if LANG == "zh" else "No room data",
+        draw.text((dx1, dy1 + 40), "无房间数据" if i18n.LANG == "zh" else "No room data",
                   fill=(150, 155, 165), font=fm)
         return img, room_map
 
     if rooms and all(r.get("hull") for r in rooms):
-        # Real IFC geometry — draw the actual room footprint polygons (hulls).
+        # Real IFC geometry — draw the actual room footprint polygons (hulls),
+        # then overlay physical elements (walls/columns/windows) from the model.
         _all = [p for r in rooms for p in r["hull"]]
+        for el in (plan_elements or []):
+            _x0, _y0, _x1, _y1 = el["bbox"][:4]
+            _all += [(_x0, _y0), (_x1, _y0), (_x0, _y1), (_x1, _y1)]
         _minx = min(p[0] for p in _all); _maxx = max(p[0] for p in _all)
         _miny = min(p[1] for p in _all); _maxy = max(p[1] for p in _all)
         _spanx = max(_maxx - _minx, 1e-6); _spany = max(_maxy - _miny, 1e-6)
         _scale = min((aw - 40) / _spanx, (ah - 40) / _spany)
         _ox = dx1 + (aw - _spanx * _scale) / 2
         _oy = dy1 + (ah - _spany * _scale) / 2
+        _polys = []
         for r in rooms:
             _poly = [(int(_ox + (x - _minx) * _scale), int(_oy + (y - _miny) * _scale)) for x, y in r["hull"]]
             _fill = ROOM_TYPE_FILL.get(r.get("type", "Office"), ROOM_TYPE_FILL["Office"])
             draw.polygon(_poly, fill=_fill, outline=(120, 130, 142))
+            _polys.append((_poly, r))
+        _draw_plan_elements(draw, plan_elements or [], _minx, _miny, _scale, _ox, _oy)
+        for _poly, r in _polys:
             _cx = int(sum(p[0] for p in _poly) / len(_poly))
             _cy = int(sum(p[1] for p in _poly) / len(_poly))
             _nm = str(r.get("name", "?"))
@@ -306,7 +343,7 @@ def render_room_plan(rooms, floor_name=""):
             draw.text((_cx - (_nb[2] - _nb[0]) // 2, _cy - 12), _nm, fill=(30, 35, 45), font=fm)
             room_map[_nm] = (_cx, _cy)
     else:
-        areas = [max(float(r.get("room_area_sqm", 20)), 4.0) for r in rooms]
+        areas = [max(float(r.get("room_area_sqm") or 20), 4.0) for r in rooms]
         rects = _treemap(areas)
         for r, (nx, ny, nw, nh) in zip(rooms, rects):
             x1 = int(dx1 + nx * aw)
@@ -317,7 +354,9 @@ def render_room_plan(rooms, floor_name=""):
             draw.rectangle([x1, y1, x2, y2], fill=fill, outline=(120, 130, 142), width=2)
             cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
             name = str(r.get("name", "?"))
-            area_txt = f'{float(r.get("room_area_sqm", 0)):.0f}m²'
+            _a = r.get("room_area_sqm")
+            area_txt = (f'{float(_a):.0f}m²' if _a is not None
+                        else ("面积未知" if i18n.LANG == "zh" else "area n/a"))
             if (x2 - x1) > 120 and (y2 - y1) > 46:
                 nb = draw.textbbox((0, 0), name, font=fm)
                 draw.text((cx - (nb[2] - nb[0]) // 2, cy - 18), name, fill=(30, 35, 45), font=fm)
@@ -357,13 +396,17 @@ def generate_building_3d(floors):
     img = Image.new("RGB", (W, H), (250, 251, 252))
     draw = ImageDraw.Draw(img)
     ft, fm, fs = _load_fonts((36, 28, 22))
-    title = "建筑 3D 立体视图" if LANG == "zh" else "BUILDING 3D ISOMETRIC VIEW"
+    title = "建筑 3D 立体视图" if i18n.LANG == "zh" else "BUILDING 3D ISOMETRIC VIEW"
     draw.rectangle([0, 0, W, 70], fill=(30, 35, 45))
     draw.text((40, 12), title, fill=(240, 245, 250), font=ft)
 
     pts = [p for f in floors for r in f.get("rooms", []) for p in (r.get("hull") or [])]
+    for f in floors:
+        for el in f.get("plan_elements") or []:
+            _x0, _y0, _x1, _y1 = el["bbox"][:4]
+            pts += [(_x0, _y0), (_x1, _y0), (_x0, _y1), (_x1, _y1)]
     if not pts:
-        draw.text((60, 130), "无房间几何数据" if LANG == "zh" else "No room geometry data",
+        draw.text((60, 130), "无房间几何数据" if i18n.LANG == "zh" else "No room geometry data",
                   fill=(150, 155, 165), font=fm)
         return img
     minx = min(p[0] for p in pts); maxx = max(p[0] for p in pts)
@@ -403,6 +446,26 @@ def generate_building_3d(floors):
             cc = sum(p[1] for p in poly) // len(poly)
             nb = draw.textbbox((0, 0), r.get("name", "?"), font=fs)
             draw.text((cr - (nb[2] - nb[0]) // 2, cc - 9), r.get("name", "?"), fill=(30, 35, 45), font=fs)
+        # overlay physical-element boxes (walls / columns) so the building
+        # envelope and structure are visible, not just room footprints
+        for el in f.get("plan_elements") or []:
+            kind = el["kind"]
+            if kind not in ("wall", "column", "pipe", "duct"):
+                continue
+            x0, y0, x1, y1 = el["bbox"][:4]
+            if kind == "pipe":
+                base = (52, 120, 168)
+            elif kind == "duct":
+                base = (124, 92, 168)
+            else:
+                base = (146, 154, 166) if kind == "wall" else (118, 126, 140)
+            dark = _darken(base)
+            corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+            pb = [iso(x, y, z) for x, y in corners]
+            pt = [iso(x, y, z + wall_h) for x, y in corners]
+            for i in range(4):
+                draw.polygon([pb[i], pb[(i + 1) % 4], pt[(i + 1) % 4], pt[i]], fill=dark)
+            draw.polygon(pt, fill=base, outline=(100, 110, 122))
         lbl = _floor_label(f.get("floor_name", f"F{idx}"))
         lb = draw.textbbox((0, 0), lbl, font=fm)
         draw.text((cx - (lb[2] - lb[0]) // 2, base_cy - z + 6), lbl, fill=(60, 65, 75), font=fm)
@@ -445,7 +508,7 @@ def generate_correction_image(image, civ, eee, conflicts, bdata=None, floor_name
         img = Image.new("RGB", (W, H), (250, 251, 252))
         draw = ImageDraw.Draw(img)
         ft, fm, fs = _load_fonts((34, 24, 20))
-        correction_title = "修正方案" if LANG == "zh" else "CORRECTION PLAN"
+        correction_title = "修正方案" if i18n.LANG == "zh" else "CORRECTION PLAN"
         title = f"{correction_title}  —  {floor_name}" if floor_name else f"{correction_title}"
         draw.rectangle([0, 0, W, 70], fill=(100, 160, 50))
         draw.text((40, 12), title, fill=(255, 255, 255), font=ft)
@@ -491,7 +554,7 @@ def generate_building_section(floors, civil_r, eee_r, building_r, conflicts):
     draw = ImageDraw.Draw(img)
     ft, fm, fs = _load_fonts((28, 20, 16))
 
-    title = "建筑剖面 · 楼层关联" if LANG == "zh" else "BUILDING SECTION · FLOOR CONNECTIONS"
+    title = "建筑剖面 · 楼层关联" if i18n.LANG == "zh" else "BUILDING SECTION · FLOOR CONNECTIONS"
     draw.rectangle([0, 0, W, 50], fill=(30, 35, 45))
     draw.text((20, 10), title, fill=(240, 245, 250), font=ft)
 
@@ -527,29 +590,29 @@ def generate_building_section(floors, civil_r, eee_r, building_r, conflicts):
         bx2 = bx + 160
         if fc > 0:
             draw.rounded_rectangle([bx2, y+12, bx2+80, y+38], radius=4, fill=C["blue"])
-            civ_lbl = f"建筑 {fc}" if LANG == "zh" else f"CIV {fc}"
+            civ_lbl = f"建筑 {fc}" if i18n.LANG == "zh" else f"CIV {fc}"
             draw.text((bx2+8, y+15), civ_lbl, fill=(255,255,255), font=fs)
             bx2 += 90
         if fe > 0:
             draw.rounded_rectangle([bx2, y+12, bx2+80, y+38], radius=4, fill=C["orange"])
-            eee_lbl = f"电气 {fe}" if LANG == "zh" else f"EEE {fe}"
+            eee_lbl = f"电气 {fe}" if i18n.LANG == "zh" else f"EEE {fe}"
             draw.text((bx2+8, y+15), eee_lbl, fill=(255,255,255), font=fs)
             bx2 += 90
         if fk > 0:
             draw.rounded_rectangle([bx2, y+12, bx2+90, y+38], radius=4, fill=C["red"])
-            c_lbl = f"冲突 {fk}" if LANG == "zh" else f"CNFL {fk}"
+            c_lbl = f"冲突 {fk}" if i18n.LANG == "zh" else f"CNFL {fk}"
             draw.text((bx2+8, y+15), c_lbl, fill=(255,255,255), font=fs)
 
         # Stairwell connecting block (left side, visual continuity)
         stair_x = bx + 20
         draw.rectangle([stair_x, y+48, stair_x+50, y+floor_h-8], fill=(255, 248, 235), outline=(200, 180, 140), width=1)
-        stair_lbl = "楼梯" if LANG == "zh" else "STAIR"
+        stair_lbl = "楼梯" if i18n.LANG == "zh" else "STAIR"
         draw.text((stair_x+4, y+58), stair_lbl, fill=(140, 110, 60), font=fs)
 
         # Elevator/services shaft (right side, carries building-level risers)
         serv_x = bx + bw - 90
         draw.rectangle([serv_x, y+48, serv_x+70, y+floor_h-8], fill=(252, 238, 238), outline=(200, 160, 160), width=1)
-        serv_lbl = "管井" if LANG == "zh" else "RISER"
+        serv_lbl = "管井" if i18n.LANG == "zh" else "RISER"
         draw.text((serv_x+8, y+58), serv_lbl, fill=(160, 80, 80), font=fs)
 
     # Draw vertical connection lines (building-level issues run through all floors)
@@ -566,7 +629,7 @@ def generate_building_section(floors, civil_r, eee_r, building_r, conflicts):
 
         # Building-level issue badge
         draw.rounded_rectangle([bx+bw+20, by+20, W-20, by+20+40], radius=6, fill=C["purple"])
-        bld_lbl = f"全楼 {n_bld}" if LANG == "zh" else f"BLD {n_bld}"
+        bld_lbl = f"全楼 {n_bld}" if i18n.LANG == "zh" else f"BLD {n_bld}"
         draw.text((bx+bw+32, by+27), bld_lbl, fill=(255,255,255), font=fm)
 
         # Individual building-level issue labels
@@ -580,12 +643,12 @@ def generate_building_section(floors, civil_r, eee_r, building_r, conflicts):
         for iss in building_r:
             rid = iss.get("rule_id", "")
             zh_name, en_name = bld_names.get(rid, (rid, rid))
-            lbl = zh_name if LANG == "zh" else en_name
+            lbl = zh_name if i18n.LANG == "zh" else en_name
             draw.text((bx+bw+28, label_y), f"● {lbl}", fill=C["purple"], font=fs)
             label_y += 24
 
         # Arrow/label indicating these span all floors
-        span_lbl = "↕ 跨楼层累积量" if LANG == "zh" else "↕ Cross-floor totals"
+        span_lbl = "↕ 跨楼层累积量" if i18n.LANG == "zh" else "↕ Cross-floor totals"
         draw.text((bx+bw+28, bot_y-20), span_lbl, fill=C["purple"], font=fs)
 
     # Legend at bottom
@@ -598,7 +661,7 @@ def generate_building_section(floors, civil_r, eee_r, building_r, conflicts):
     ]
     lx = bx
     for (lb_zh, lb_en), col in items:
-        lb = lb_zh if LANG == "zh" else lb_en
+        lb = lb_zh if i18n.LANG == "zh" else lb_en
         draw.rectangle([lx, leg_y, lx+16, leg_y+16], fill=col)
         draw.text((lx+22, leg_y), lb, fill=(60, 65, 75), font=fs)
         lx += 90

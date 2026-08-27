@@ -6,6 +6,7 @@ the LLM is slow or unreachable.
 """
 import re
 
+from core import i18n
 from llm import client
 
 _cache = {}
@@ -49,8 +50,12 @@ def resolve_threshold(rule, item):
 
 def _llm_extract(query, code_ref):
     try:
-        system = "你是建筑规范数值提取器。"
-        user = f"{query}，最小数值（米），只输出数字"
+        if i18n.LANG == "en":
+            system = "You extract numeric limits from building codes."
+            user = f"{query} — minimum value in metres, output the number only"
+        else:
+            system = "你是建筑规范数值提取器。"
+            user = f"{query}，最小数值（米），只输出数字"
         out = client.chat(system, user)
         m = re.search(r"[-+]?\d*\.?\d+", out)
         if m:

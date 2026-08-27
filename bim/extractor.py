@@ -42,12 +42,39 @@ def _length_scale(m):
 
     If the model declares no length unit, infer it from the storey elevations:
     a real building's storey elevations land in ~0.5-500 m, whereas mm models
-    are in the thousands+.
+    are in the thousands+. If the declared unit is mm but the element geometry
+    is clearly metre-scale (mixed exports, e.g. Schependomlaan), use metres for
+    geometry measurements (storey elevations are normalised separately).
     """
+    declared = None
     for ua in m.by_type("IfcUnitAssignment"):
         for u in ua.Units:
             if u.is_a("IfcSIUnit") and u.UnitType == "LENGTHUNIT":
-                return _PREFIX_SCALE.get(u.Prefix, 1.0)
+                declared = _PREFIX_SCALE.get(u.Prefix, 1.0)
+                break
+    if declared is not None and declared < 1.0:
+        # cross-check geometry magnitude: are sampled elements plausibly sized at
+        # the declared scale, or are they metre-scale despite a mm declaration?
+        s = ifcgeom.settings()
+        small, checked = 0, 0
+        for t in ("IfcSlab", "IfcColumn", "IfcBeam"):
+            for e in m.by_type(t)[:3]:
+                try:
+                    sh = ifcgeom.create_shape(s, e)
+                    v = sh.geometry.verts
+                    if len(v) < 6:
+                        continue
+                    dims = [max(v[i::3]) - min(v[i::3]) for i in range(3)]
+                    if min(dims) * declared < 0.02:  # implausibly tiny at declared scale
+                        small += 1
+                    checked += 1
+                except Exception:
+                    pass
+        if checked >= 3 and small >= checked * 0.5:
+            return 1.0  # geometry is metre-scale despite the mm declaration
+        return declared
+    if declared is not None:
+        return declared
     elevations = [abs(s.Elevation or 0.0) for s in m.by_type("IfcBuildingStorey")]
     if elevations:
         peak = max(elevations)
@@ -60,6 +87,409 @@ def _extrude_profile(item):
     if item.is_a("IfcExtrudedAreaSolid") and item.SweptArea.is_a("IfcRectangleProfileDef"):
         return item.SweptArea
     return None
+
+
+def _plan_element_kind(e):
+    t = e.is_a()
+    if t in ("IfcWall", "IfcWallStandardCase"):
+        return "wall"
+    if t == "IfcColumn":
+        return "column"
+    if t == "IfcBeam":
+        return "beam"
+    if t in ("IfcSlab", "IfcSlabStandardCase"):
+        return "slab"
+    if t == "IfcWindow":
+        return "window"
+    if t == "IfcDoor":
+        return "door"
+    if t in ("IfcFlowSegment", "IfcPipeSegment"):
+        return "pipe"
+    if t == "IfcDuctSegment":
+        return "duct"
+    return None
+
+
+def _pset_value(e, pset_name, prop_name):
+    """Value of a named property inside a named IfcPropertySet (None if absent)."""
+    for rel in (e.IsDefinedBy or []):
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        pd = rel.RelatingPropertyDefinition
+        if pd.is_a("IfcPropertySet") and pd.Name == pset_name:
+            for p in pd.HasProperties:
+                if p.Name == prop_name and p.NominalValue:
+                    try:
+                        return p.NominalValue.wrappedValue
+                    except Exception:
+                        pass
+    return None
+
+
+def _pipe_slope_from_geom(e, settings):
+    """Slope (rise/horiz) from a sloped pipe's tessellated geometry — the
+    fallback when the model doesn't carry the slope in a property (real IFCs)."""
+    try:
+        sh = ifcgeom.create_shape(settings, e)
+        v = sh.geometry.verts
+        pts = [(v[i], v[i + 1], v[i + 2]) for i in range(0, len(v), 3)]
+        if len(pts) < 6:
+            return None
+        ranges = [max(p[a] for p in pts) - min(p[a] for p in pts) for a in (0, 1, 2)]
+        axis = ranges.index(max(ranges))          # dominant axis = pipe length
+        lo, hi = min(p[axis] for p in pts), max(p[axis] for p in pts)
+        span = max(hi - lo, 1e-9)
+        low = [p for p in pts if p[axis] <= lo + span * 0.2]
+        high = [p for p in pts if p[axis] >= hi - span * 0.2]
+        if not low or not high:
+            return None
+
+        def mean(g):
+            return (sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g),
+                    sum(p[2] for p in g) / len(g))
+
+        lx, ly, lz = mean(low)
+        hx, hy, hz = mean(high)
+        horiz = ((hx - lx) ** 2 + (hy - ly) ** 2) ** 0.5
+        if horiz < 1e-6:
+            return None
+        return round((hz - lz) / horiz, 4)
+    except Exception:
+        return None
+
+
+_PIPE_TYPE_RULES = [
+    ("fire", ("fire", "sprinkler", "hydrant", "brand", "消防")),
+    ("drainage", ("sanitary", "soil", "waste", "storm", "drain", "afvoer", "riool",
+                  "hemelwater", "hwa", "regenwater", "排水", "废水", "污")),
+    ("supply", ("domestic", "cold water", "water supply", "waterleiding", "drinkwater",
+                "给水", "供水")),
+    ("hydronic", ("hydronic", "chilled", "heating", "cooling", "cv", "verwarming",
+                  "暖通", "冷冻")),
+    ("gas", ("gas", "燃气")),
+    ("vent", ("exhaust", "vent", "air", "lucht")),
+]
+
+
+def _classify_pipe_type(e):
+    """Classify a real pipe's purpose from its IFC properties.
+
+    Real exports carry the system role in PSet_Revit_Mechanical (System Type /
+    System Name) or Pset_PipeSegmentCommon; falls back to the element name.
+    Returns one of: fire / drainage / supply / hydronic / gas / vent / unknown.
+    """
+    text = " ".join(filter(None, [
+        _pset_value(e, "PSet_Revit_Mechanical", "System Type"),
+        _pset_value(e, "PSet_Revit_Mechanical", "System Name"),
+        _pset_value(e, "Pset_PipeSegmentCommon", "FlowDirection"),
+        e.Name or "",
+    ])).lower()
+    for pipe_type, kws in _PIPE_TYPE_RULES:
+        if any(k in text for k in kws):
+            return pipe_type
+    return "unknown"
+
+
+def _any_prop_value(e, prop_name):
+    """Value of a property searched by name across all the element's Psets."""
+    for rel in (e.IsDefinedBy or []):
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        pd = rel.RelatingPropertyDefinition
+        if pd.is_a("IfcPropertySet"):
+            for p in pd.HasProperties:
+                if p.Name == prop_name and p.NominalValue:
+                    try:
+                        return p.NominalValue.wrappedValue
+                    except Exception:
+                        pass
+    return None
+
+
+def _pipe_data(e, scale, settings):
+    """Real pipe data for a contained IfcFlowSegment: type/diameter/slope from
+    ArchCheckPipeParams (Pset), geometry bbox as fallback for diameter/length,
+    geometry rise/horiz as fallback for slope."""
+    pipe_type = _pset_value(e, "ArchCheckPipeParams", "pipe_type") or _classify_pipe_type(e)
+    diameter = _pset_value(e, "ArchCheckPipeParams", "diameter_m")
+    slope = _pset_value(e, "ArchCheckPipeParams", "slope")
+    length = None
+    d = _elem_bbox_dims(e, scale, settings)
+    if d:
+        dims = sorted(d)
+        length = round(dims[2], 3)
+        if diameter is None:
+            diameter = round(dims[0], 3)
+    if diameter is not None:
+        diameter = round(float(diameter), 3)
+    if slope is None:
+        # real IFCs often carry slope in a property (e.g. PSet_Revit_Constraints.Slope)
+        _real = _any_prop_value(e, "Slope")
+        try:
+            _real = float(_real)
+            if not (0.0 <= _real <= 1.0):   # reject corrupt/unit-mismatched values
+                _real = None
+        except (TypeError, ValueError):
+            _real = None
+        slope = _real if _real is not None else _pipe_slope_from_geom(e, settings)
+    if slope is not None:
+        slope = round(float(slope), 3)
+    return {"name": e.Name or e.GlobalId, "pipe_type": pipe_type,
+            "diameter_m": diameter, "slope": slope, "length_m": length}
+
+
+def _duct_data(e, scale, settings):
+    """Real HVAC duct data: cross-section + clear net height from
+    ArchCheckDuctParams (Pset), length from geometry bbox."""
+    width = _pset_value(e, "ArchCheckDuctParams", "duct_width_m")
+    height = _pset_value(e, "ArchCheckDuctParams", "duct_height_m")
+    net = _pset_value(e, "ArchCheckDuctParams", "net_height_m")
+    length = None
+    d = _elem_bbox_dims(e, scale, settings)
+    if d:
+        length = round(max(d), 3)
+    return {"name": e.Name or e.GlobalId,
+            "duct_width_m": round(float(width), 3) if width is not None else None,
+            "duct_height_m": round(float(height), 3) if height is not None else None,
+            "net_height_m": round(float(net), 3) if net is not None else None,
+            "length_m": length}
+
+
+def _electrical_equip_kind(e):
+    """Classify a real electrical element (any schema) as lighting / socket /
+    distribution, from ArchCheckEEEEquip or from type + name keywords. IfcFlowController
+    is NOT enough for "distribution" (it covers valves/dampers) — require a name hint."""
+    et = _pset_value(e, "ArchCheckEEEEquip", "equipment_type")
+    if et:
+        return et
+    nm = (e.Name or "").lower()
+    t = e.is_a()
+    if any(k in nm for k in ("light", "lamp", "pendant", "sconce", "downlight", "应急", "筒灯", "灯具")):
+        return "lighting"
+    if any(k in nm for k in ("receptacle", "outlet", "socket", "插座")):
+        return "socket"
+    if t == "IfcElectricDistributionBoard" or \
+       any(k in nm for k in ("panel", "breaker", "配电", "电箱", "alarm control")):
+        return "distribution"
+    return None
+
+
+def _electrical_equipment(els, room_type_map):
+    """Real electrical equipment elements (lighting / socket / distribution)
+    with only the params relevant to their type (so rules skip non-matching
+    elements instead of reporting data-missing). Works on IFC2X3 too — real
+    exports carry lights/panels as IfcFlowTerminal / IfcFlowController and the
+    info lives in the element name (e.g. "M_Sconce Light - 100W - 120V")."""
+    out = []
+    for e in els:
+        if not (e.is_a("IfcElectricAppliance") or e.is_a("IfcLightFixture")
+                or e.is_a("IfcElectricDistributionBoard") or e.is_a("IfcFlowTerminal")
+                or e.is_a("IfcFlowController")):
+            continue
+        et = _electrical_equip_kind(e)
+        if not et:
+            continue
+        room = _pset_value(e, "ArchCheckEEEEquip", "room_ref") or ""
+        d = {"name": e.Name or e.GlobalId, "equipment_type": et,
+             "room": room, "room_type": room_type_map.get(room, "")}
+        nm = (e.Name or "").lower()
+        if et == "lighting":
+            d["has_emergency"] = _pset_value(e, "ArchCheckEEEEquip", "has_emergency")
+            if d["has_emergency"] is None:
+                d["has_emergency"] = True if ("emergency" in nm or "应急" in nm) else None
+            d["power_w"] = _pset_value(e, "ArchCheckEEEEquip", "power_w")
+            if d["power_w"] is None:
+                m = re.search(r"(\d+(?:\.\d+)?)\s*w\b", nm)
+                if m:
+                    d["power_w"] = float(m.group(1))
+        elif et == "socket":
+            d["outlet_spacing_m"] = _pset_value(e, "ArchCheckEEEEquip", "outlet_spacing_m")
+        elif et == "distribution":
+            d["circuit_load_a"] = _pset_value(e, "ArchCheckEEEEquip", "circuit_load_a")
+            d["dist_to_water_m"] = _pset_value(e, "ArchCheckEEEEquip", "dist_to_water_m")
+        out.append(d)
+    return out
+
+
+def _pipe_segment(e, settings):
+    """((x0, y0), (x1, y1)) horizontal endpoints of a pipe, from geometry."""
+    try:
+        sh = ifcgeom.create_shape(settings, e)
+        v = sh.geometry.verts
+        pts = [(v[i], v[i + 1], v[i + 2]) for i in range(0, len(v), 3)]
+        if len(pts) < 6:
+            return None
+        ranges = [max(p[a] for p in pts) - min(p[a] for p in pts) for a in (0, 1, 2)]
+        ax = ranges.index(max(ranges))
+        lo, hi = min(p[ax] for p in pts), max(p[ax] for p in pts)
+        span = max(hi - lo, 1e-9)
+        low = [p for p in pts if p[ax] <= lo + span * 0.2]
+        high = [p for p in pts if p[ax] >= hi - span * 0.2]
+        if not low or not high:
+            return None
+        return ((sum(p[0] for p in low) / len(low), sum(p[1] for p in low) / len(low)),
+                (sum(p[0] for p in high) / len(high), sum(p[1] for p in high) / len(high)))
+    except Exception:
+        return None
+
+
+def _equip_centroid(e, settings):
+    """(name, x, y, z, r) centroid + effective horizontal half-extent of an
+    electrical equipment element (world coords, r ≈ min horizontal half-size)."""
+    try:
+        sh = ifcgeom.create_shape(settings, e)
+        v = sh.geometry.verts
+        xs = v[0::3]; ys = v[1::3]; zs = v[2::3]
+        r = min(max(xs) - min(xs), max(ys) - min(ys)) / 2
+        return {"name": e.Name or "equip",
+                "x": (min(xs) + max(xs)) / 2, "y": (min(ys) + max(ys)) / 2,
+                "z": (min(zs) + max(zs)) / 2, "r": r}
+    except Exception:
+        return None
+
+
+def _dist_pt_seg(p, a, b):
+    """Horizontal distance from point p to segment a-b."""
+    px, py = p
+    ax, ay = a
+    bx, by = b
+    dx, dy = bx - ax, by - ay
+    if dx == 0 and dy == 0:
+        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+    cx, cy = ax + t * dx, ay + t * dy
+    return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+
+
+def _elem_world_bbox(elem, settings):
+    """(x0, y0, x1, y1, z0, z1) world-space bbox in model units (None on failure)."""
+    try:
+        sh = ifcgeom.create_shape(settings, elem)
+        v = sh.geometry.verts
+        if len(v) < 6:
+            return None
+        xs = v[0::3]; ys = v[1::3]; zs = v[2::3]
+        return (min(xs), min(ys), max(xs), max(ys), min(zs), max(zs))
+    except Exception:
+        return None
+
+
+def _point_in_mesh(px, py, pz, verts, faces):
+    """Ray-cast point-in-polyhedron (ray along +z, Möller-Trumbore). True if the
+    point is strictly inside a closed triangle mesh."""
+    inside = False
+    n = len(faces)
+    for i in range(0, n, 3):
+        a, b, c = faces[i], faces[i + 1], faces[i + 2]
+        v0x, v0y, v0z = verts[a * 3], verts[a * 3 + 1], verts[a * 3 + 2]
+        v1x, v1y, v1z = verts[b * 3], verts[b * 3 + 1], verts[b * 3 + 2]
+        v2x, v2y, v2z = verts[c * 3], verts[c * 3 + 1], verts[c * 3 + 2]
+        e1x, e1y, e1z = v1x - v0x, v1y - v0y, v1z - v0z
+        e2x, e2y, e2z = v2x - v0x, v2y - v0y, v2z - v0z
+        # h = cross(dir=(0,0,1), e2)
+        hx, hy = -e2y, e2x
+        det = e1x * hx + e1y * hy                      # dot(e1, h)
+        if abs(det) < 1e-12:
+            continue
+        inv = 1.0 / det
+        sx, sy, sz = px - v0x, py - v0y, pz - v0z
+        u = inv * (sx * hx + sy * hy)
+        if u < 0.0 or u > 1.0:
+            continue
+        # q = cross(s, e1)
+        qx, qy, qz = sy * e1z - sz * e1y, sz * e1x - sx * e1z, sx * e1y - sy * e1x
+        v = inv * qz                                  # dot(q, dir=(0,0,1))
+        if v < 0.0 or u + v > 1.0:
+            continue
+        t = inv * (qx * e2x + qy * e2y + qz * e2z)
+        if t > 0.0:
+            inside = not inside
+    return inside
+
+
+def _detect_clashes(els, settings, margin=0.05):
+    """Cross-discipline clash pre-check between MEP (pipe/duct) and structure
+    (beam/slab/wall). bbox overlap (depth > margin) produces candidates; each is
+    then CONFIRMED by point-in-mesh (any MEP vertex strictly inside the solid).
+    Columns are excluded (pipes commonly run alongside them). Returns
+    [{mep, vs, type, depth, confirmed}]."""
+    mep = [e for e in els if e.is_a("IfcFlowSegment") or e.is_a("IfcDuctSegment")]
+    solid = [e for e in els
+             if e.is_a("IfcBeam") or e.is_a("IfcSlab") or e.is_a("IfcWall") or e.is_a("IfcWallStandardCase")]
+    out = []
+    for a in mep:
+        ba = _elem_world_bbox(a, settings)
+        if not ba:
+            continue
+        for b in solid:
+            bb = _elem_world_bbox(b, settings)
+            if not bb:
+                continue
+            ox = min(ba[2], bb[2]) - max(ba[0], bb[0])
+            oy = min(ba[3], bb[3]) - max(ba[1], bb[1])
+            oz = min(ba[5], bb[5]) - max(ba[4], bb[4])
+            if ox > margin and oy > margin and oz > margin:
+                out.append({"mep": a.Name or "?", "vs": b.Name or "?",
+                            "type": b.is_a(), "depth": round(min(ox, oy, oz), 2),
+                            "confirmed": _confirm_clash(a, b, settings)})
+    return out
+
+
+def _confirm_clash(a, b, settings):
+    """True if any of MEP element a's mesh vertices is strictly inside solid b."""
+    try:
+        sha = ifcgeom.create_shape(settings, a)
+        v = sha.geometry.verts
+        shb = ifcgeom.create_shape(settings, b)
+        vb = shb.geometry.verts
+        fb = shb.geometry.faces
+        if len(fb) < 3:
+            return False
+        for i in range(0, len(v), 3):
+            if _point_in_mesh(v[i], v[i + 1], v[i + 2], vb, fb):
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _plan_elements(els, settings, cap=150):
+    """Footprint geometry of physical elements (walls/columns/windows/...) for
+    drawing a data-driven plan/3D view. Same coordinate frame as room hulls
+    (model units, world coords). Bounded by ``cap`` per storey."""
+    out = []
+    for e in els:
+        kind = _plan_element_kind(e)
+        if not kind or len(out) >= cap:
+            continue
+        b = _elem_world_bbox(e, settings)
+        if not b:
+            continue
+        x0, y0, x1, y1, z0, z1 = b
+        if x1 - x0 < 1e-6 or y1 - y0 < 1e-6 or z1 - z0 < 1e-6:
+            continue
+        out.append({"kind": kind, "name": e.Name or "",
+                    "bbox": [round(v, 2) for v in b]})
+    return out
+
+
+def _brep_xy_area(item, scale):
+    """XY bounding-rectangle area (m²) of an IfcFacetedBrep box (None if not a box)."""
+    try:
+        shell = item.Outer.CfsFaces
+        pts = []
+        for face in shell:
+            for bound in face.Bounds:
+                for p in bound.Bound.Polygon:
+                    c = p.Coordinates
+                    pts.append((c[0], c[1]))
+        if not pts:
+            return None
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        return (max(xs) - min(xs)) * (max(ys) - min(ys)) * scale * scale
+    except Exception:
+        return None
 
 
 def _elem_bbox_dims(elem, scale, settings):
@@ -79,51 +509,132 @@ def _elem_bbox_dims(elem, scale, settings):
         return None
 
 
+def _elem_material(e):
+    """Material name of an element (None if absent). Handles IfcMaterial,
+    IfcMaterialLayerSetUsage (first layer) and IfcMaterialList associations."""
+    for rel in (e.HasAssociations or []):
+        if not rel.is_a("IfcRelAssociatesMaterial"):
+            continue
+        mr = rel.RelatingMaterial
+        if mr.is_a("IfcMaterial"):
+            return mr.Name
+        if mr.is_a("IfcMaterialLayerSetUsage"):
+            mls = mr.ForLayerSet
+            if mls and mls.MaterialLayers:
+                for l in mls.MaterialLayers:
+                    if l.Material and l.Material.Name:
+                        return l.Material.Name
+        if mr.is_a("IfcMaterialList") and mr.Materials:
+            return mr.Materials[0].Name
+    return None
+
+
+def _material_volumes(elements):
+    """{material: total volume m³} over structural elements, 'unknown' for None."""
+    out = {}
+    for e in elements:
+        mt = e.get("material") or "unknown"
+        out[mt] = out.get(mt, 0) + (e.get("volume_m3") or 0)
+    return {k: round(v, 2) for k, v in out.items()}
+
+
+def _qty_by_type(elements):
+    """{element_type: {count, volume_m3}} over structural elements."""
+    out = {}
+    for e in elements:
+        t = e.get("element_type", "?")
+        out.setdefault(t, {"count": 0, "volume_m3": 0.0})
+        out[t]["count"] += 1
+        out[t]["volume_m3"] += (e.get("volume_m3") or 0)
+    return {k: {"count": v["count"], "volume_m3": round(v["volume_m3"], 2)}
+            for k, v in out.items()}
+
+
+def _elem_volume(elem, settings, scale):
+    """Volume (m³) of a closed solid element from its tessellated mesh, via the
+    signed-tetrahedron (divergence-theorem) formula. None if not computable."""
+    try:
+        sh = ifcgeom.create_shape(settings, elem)
+        v = sh.geometry.verts
+        f = sh.geometry.faces
+        if len(f) < 3:
+            return None
+        vol = 0.0
+        for i in range(0, len(f), 3):
+            a, b, c = f[i], f[i + 1], f[i + 2]
+            ax, ay, az = v[a * 3], v[a * 3 + 1], v[a * 3 + 2]
+            bx, by, bz = v[b * 3], v[b * 3 + 1], v[b * 3 + 2]
+            cx, cy, cz = v[c * 3], v[c * 3 + 1], v[c * 3 + 2]
+            vol += ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)
+        vol = abs(vol) / 6.0 * (scale ** 3)
+        return round(vol, 4)
+    except Exception:
+        return None
+
+
 def _structural_sections(els, settings, scale, col_cap=200, other_cap=30):
     """Sample structural element data from storey elements.
 
-    Returns (elements, column_sections, beam_sections, slab_thicknesses).
-    ``elements`` is a per-element list (id/name/element_type + section fields)
-    that the review engine can judge; columns are sampled up to col_cap (they
-    drive the structural rule) while beams/slabs stay at other_cap to bound
-    tessellation cost on real buildings.
+    Returns (elements, column_sections, beam_sections, slab_thicknesses,
+    unit_suspicious). ``elements`` is a per-element list (id/name/element_type +
+    section fields) that the review engine can judge; columns are sampled up to
+    col_cap while beams/slabs stay at other_cap to bound tessellation cost.
+    ``unit_suspicious`` counts column/beam/slab elements whose scaled dimensions
+    are implausibly small (< 0.02 m) — a sign of a unit-magnitude mismatch in
+    the source model — so they are not silently dropped.
     """
     elements, col_sec, beam_sec, slab_th = [], [], [], []
     ncol = nbeam = nslab = 0
+    unit_suspicious = 0
     for e in els:
         if e.is_a("IfcColumn"):
             if ncol >= col_cap:
                 continue
             ncol += 1
             d = _elem_bbox_dims(e, scale, settings)
+            if d and min(d) < 0.02:
+                unit_suspicious += 1
+                continue
             if d and 0.05 < min(d[:2]) and max(d[:2]) < 2.0:
                 w, dep = sorted((round(d[0], 3), round(d[1], 3)))
                 col_sec.append((w, dep))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
                                  "element_type": "column", "section_min_m": w,
-                                 "section_max_m": dep})
+                                 "section_max_m": dep,
+                                 "volume_m3": _elem_volume(e, settings, scale),
+                                 "material": _elem_material(e)})
         elif e.is_a("IfcBeam"):
             if nbeam >= other_cap:
                 continue
             nbeam += 1
             d = _elem_bbox_dims(e, scale, settings)
+            if d and min(d) < 0.02:
+                unit_suspicious += 1
+                continue
             if d and 0.05 < d[2] < 2.0:
                 beam_sec.append((round(d[2], 3), round(min(d[:2]), 3)))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
                                  "element_type": "beam", "depth_m": round(d[2], 3),
                                  "width_m": round(min(d[:2]), 3),
-                                 "span_m": round(max(d[0], d[1]), 3)})
+                                 "span_m": round(max(d[0], d[1]), 3),
+                                 "volume_m3": _elem_volume(e, settings, scale),
+                                 "material": _elem_material(e)})
         elif e.is_a("IfcSlab"):
             if nslab >= other_cap:
                 continue
             nslab += 1
             d = _elem_bbox_dims(e, scale, settings)
+            if d and min(d) < 0.02:
+                unit_suspicious += 1
+                continue
             if d and 0.02 < d[2] < 1.0:
                 slab_th.append(round(d[2], 3))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
                                  "element_type": "slab", "thickness_m": round(d[2], 3),
-                                 "span_m": round(max(d[0], d[1]), 3)})
-    return elements, sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th))
+                                 "span_m": round(max(d[0], d[1]), 3),
+                                 "volume_m3": _elem_volume(e, settings, scale),
+                                 "material": _elem_material(e)})
+    return elements, sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th)), unit_suspicious
 
 
 def _door_shape_info(door, scale):
@@ -225,21 +736,40 @@ def _storey_footprint(m, storey, scale):
                         if prof:
                             a = (prof.XDim * scale) * (prof.YDim * scale)
                             best = max(best, a)
+                        else:
+                            a = _brep_xy_area(it, scale)
+                            if a:
+                                best = max(best, a)
     return round(best, 1)
 
 
-def _space_hull(space, settings):
-    """(convex_hull_xy, centroid_xy) of a space's tessellated XY projection.
+def _space_bounding_box(space):
+    """(x_dim, y_dim) of a space's IfcBoundingBox in model units (None if absent)."""
+    try:
+        for rep in (space.Representation.Representations or []) if space.Representation else []:
+            for it in (rep.Items or []):
+                if it.is_a("IfcBoundingBox"):
+                    return float(it.XDim), float(it.YDim)
+    except Exception:
+        pass
+    return None
 
-    Coordinates are in model units. Used both for area (convex-hull approx,
-    overestimates concave spaces) and for door->room association.
-    """
+
+def _space_hull(space, settings):
+    """(convex_hull_xy, centroid_xy, precise_area_units) of a space's tessellated
+    XY projection. Coordinates in model units. precise_area_units is the exact
+    2D outline area (positive-signed projected triangles — handles concave rooms,
+    which the convex hull overestimates), or None when the mesh has no faces.
+    Spaces without any tessellatable geometry fall back to their IfcBoundingBox
+    area; if there is no geometry at all, area_units is None (area unknown)."""
     try:
         shape = ifcgeom.create_shape(settings, space)
         v = shape.geometry.verts
+        f = shape.geometry.faces
         pts = sorted(set((v[i], v[i + 1]) for i in range(0, len(v), 3)))
         if len(pts) < 3:
-            return None, None
+            bb = _space_bounding_box(space)
+            return None, None, (bb[0] * bb[1]) if bb else None, bool(bb)
         def cross(o, a, b):
             return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
         lo = []
@@ -253,9 +783,24 @@ def _space_hull(space, settings):
                 up.pop()
             up.append(p)
         hull = lo[:-1] + up[:-1]
-        return hull, (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+        centroid = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+        area_units = None
+        if len(f) >= 3:
+            pos = 0.0
+            for i in range(0, len(f), 3):
+                a, b, c = f[i], f[i + 1], f[i + 2]
+                ax, ay = v[a * 3], v[a * 3 + 1]
+                bx, by = v[b * 3], v[b * 3 + 1]
+                cx, cy = v[c * 3], v[c * 3 + 1]
+                ar = ((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) / 2.0
+                if ar > 0:
+                    pos += ar
+            if pos > 0:
+                area_units = pos
+        return hull, centroid, area_units, False
     except Exception:
-        return None, None
+        bb = _space_bounding_box(space)
+        return None, None, (bb[0] * bb[1]) if bb else None, bool(bb)
 
 
 def _hull_area(hull, scale):
@@ -272,7 +817,7 @@ def _space_area_m2(space, scale, settings=None):
     if settings is None:
         settings = ifcgeom.settings()
         settings.set(settings.USE_WORLD_COORDS, True)
-    hull, _ = _space_hull(space, settings)
+    hull, _, _, _ = _space_hull(space, settings)
     return _hull_area(hull, scale) if hull else 0.0
 
 
@@ -447,17 +992,27 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
         exit_count = len(door_widths)
         real = [w for w in door_widths if w is not None]
         door_width = max(real) if real else None
+    # electrical params: real values when the model declares them
+    # (ArchCheckEEEParams), otherwise honest defaults the user can fill in
+    # (the editor marks these 🟠 默认·待填写 vs 🟢 来自模型).
+    light = _pset_value(space, "ArchCheckEEEParams", "has_emergency_light")
+    water = _pset_value(space, "ArchCheckEEEParams", "dist_to_water_m")
+    circuit = _pset_value(space, "ArchCheckEEEParams", "circuit_load_a")
+    outlet = _pset_value(space, "ArchCheckEEEParams", "outlet_spacing_m")
+    eee_src = "model" if (light is not None or water is not None) else "default"
     return {
         "id": space.GlobalId or name,
         "name": name,
         "type": rtype,
-        "room_area_sqm": round(area, 1),
+        "room_area_sqm": round(area, 1) if area is not None else None,
         "exit_count": exit_count,
         "door_width_m": door_width,
-        "has_emergency_light": rtype not in ("Stairwell", "Corridor", "Vestibule"),
-        "dist_to_water_m": 5.0,
-        "circuit_load_a": 10,
-        "outlet_spacing_m": 5.0,
+        "has_emergency_light": bool(light) if light is not None
+            else (rtype not in ("Stairwell", "Corridor", "Vestibule")),
+        "dist_to_water_m": float(water) if water is not None else 5.0,
+        "circuit_load_a": float(circuit) if circuit is not None else 10,
+        "outlet_spacing_m": float(outlet) if outlet is not None else 5.0,
+        "eee_src": eee_src,
         "corridor_length_m": travel_distance or 0,
         "hull": hull,
     }
@@ -477,6 +1032,15 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         raise RuntimeError("ifcopenshell is not installed.")
     path = str(path)
     scale = _length_scale(m)
+    # mixed-unit models (e.g. Schependomlaan): geometry is metre-scale but storey
+    # elevations are in mm — normalise elevations separately for display / z-assignment.
+    elev_scale = scale
+    try:
+        raw_elevs = [st.Elevation or 0.0 for st in m.by_type("IfcBuildingStorey")]
+        if scale == 1.0 and raw_elevs and max(abs(e) for e in raw_elevs) > 500:
+            elev_scale = 0.001
+    except Exception:
+        pass
     geom_settings = ifcgeom.settings()
     geom_settings.set(geom_settings.USE_WORLD_COORDS, True)
 
@@ -524,6 +1088,51 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
     # Only compute geometry/doors for storeys and spaces that appear in output.
     kept_storey_gids = {st.GlobalId for st in storeys}
 
+    # Structural fallback: real models often don't contain columns/beams/slabs
+    # in the storey's IfcRelContainedInSpatialStructure. Assign uncontained
+    # structural elements to a storey by their world z-centre so STR rules have
+    # something to judge (e.g. Schependomlaan: 174 beams + 279 slabs uncontained).
+    structural_fallback = {}
+    if storeys:
+        elevs = [(st.Elevation or 0.0) * elev_scale for st in storeys]
+        # only skip elements already attached to a kept storey; real models
+        # (e.g. Schependomlaan) contain structural elements under the building
+        # or site instead of the storey, so those still need z-assignment.
+        kept_els_gids = {e.GlobalId for st in storeys for e in by_storey.get(st.GlobalId, [])}
+        for e in list(m.by_type("IfcColumn")) + list(m.by_type("IfcBeam")) + list(m.by_type("IfcSlab")):
+            if e.GlobalId in kept_els_gids:
+                continue
+            b = _elem_world_bbox(e, geom_settings)
+            if not b:
+                continue
+            zc = (b[4] + b[5]) / 2
+            idx = 0
+            for i, ev in enumerate(elevs):
+                if zc >= ev:
+                    idx = i
+            structural_fallback.setdefault(storeys[idx].GlobalId, []).append(e)
+
+    # Electrical fallback: same containment reality — lights/panels/terminals are
+    # often under the building/site, not a storey. Assign uncontained electrical
+    # elements to a storey by their world z-centre.
+    electrical_fallback = {}
+    if storeys:
+        kept_els_gids2 = {e.GlobalId for st in storeys for e in by_storey.get(st.GlobalId, [])}
+        # IfcDistributionFlowElement covers terminals/controllers/appliances in
+        # both schemas (IFC4-only type names can't be used with by_type).
+        for e in m.by_type("IfcDistributionFlowElement"):
+            if e.GlobalId in kept_els_gids2 or not _electrical_equip_kind(e):
+                continue
+            b = _elem_world_bbox(e, geom_settings)
+            if not b:
+                continue
+            zc = (b[4] + b[5]) / 2
+            idx = 0
+            for i, ev in enumerate(elevs):
+                if zc >= ev:
+                    idx = i
+            electrical_fallback.setdefault(storeys[idx].GlobalId, []).append(e)
+
     space_geom = {}
     space_storey = {}
     kept_spaces = []
@@ -531,8 +1140,17 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         if sg not in kept_storey_gids:
             continue
         for sp in slist:
-            hull, centroid = _space_hull(sp, geom_settings)
-            space_geom[sp.GlobalId] = (hull, _hull_area(hull, scale) if hull else 0.0, centroid)
+            hull, centroid, area_units, is_bbox = _space_hull(sp, geom_settings)
+            if area_units:
+                # bounding-box spaces are mm-scale in mixed models (like storey
+                # elevations) while solid geometry is metre-scale
+                _ascale = elev_scale if is_bbox else scale
+                area = round(area_units * _ascale * _ascale, 1)
+            elif hull:
+                area = _hull_area(hull, scale)
+            else:
+                area = None  # no geometry -> area unknown (don't fake 0)
+            space_geom[sp.GlobalId] = (hull, area, centroid)
             space_storey[sp.GlobalId] = sg
             kept_spaces.append(sp)
 
@@ -547,6 +1165,11 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
     door_room = _associate_doors(space_geom, door_geom, scale, kept_spaces,
                                  space_storey, door_storey)
     travel = _compute_travel_distances(space_geom, door_room, door_geom, scale)
+
+    # Only extract per-element footprint geometry for affordable models (the
+    # plan/3D detail render); huge models skip it to keep parsing fast.
+    total_phys = sum(len(v) for v in by_storey.values())
+    extract_plan = total_phys <= 600
 
     floors = []
     for storey in storeys:
@@ -564,7 +1187,29 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 s = _ramp_slope(e, scale)
                 if s is not None:
                     ramp_slopes.append(s)
-        elements, col_sec, beam_sec, slab_th = _structural_sections(els, geom_settings, scale)
+        elements, col_sec, beam_sec, slab_th, unit_suspicious = _structural_sections(
+            els + structural_fallback.get(storey.GlobalId, []), geom_settings, scale)
+        plan_elems = _plan_elements(els, geom_settings) if extract_plan else []
+        clashes = _detect_clashes(els, geom_settings) if extract_plan else []
+        pipe_elems = [e for e in els if e.is_a("IfcFlowSegment") and not e.is_a("IfcDuctSegment")]
+        pipes = [_pipe_data(e, scale, geom_settings) for e in pipe_elems]
+        ducts = [_duct_data(e, scale, geom_settings) for e in els if e.is_a("IfcDuctSegment")]
+        equip = [q for q in (_equip_centroid(e, geom_settings) for e in els
+                             if e.is_a("IfcElectricAppliance") or e.is_a("IfcLightFixture")) if q]
+        room_type_map = {}
+        for _sp in storey_spaces.get(storey.GlobalId, []):
+            _ref = ref_map.get(_sp.GlobalId) or _sp.Name or ""
+            room_type_map[_ref] = _classify_room_type(f"{_ref} {_sp.Name or ''}")
+        electrical = _electrical_equipment(els + electrical_fallback.get(storey.GlobalId, []),
+                                           room_type_map)
+        if equip:
+            for e, pipe in zip(pipe_elems, pipes):
+                seg = _pipe_segment(e, geom_settings)
+                if seg:
+                    pr = (pipe.get("diameter_m") or 0.0) / 2
+                    clear = min(_dist_pt_seg((q["x"], q["y"]), seg[0], seg[1]) - pr - q.get("r", 0.0)
+                                for q in equip)
+                    pipe["min_clearance_m"] = round(max(clear, 0.0), 3)
 
         spaces = storey_spaces.get(storey.GlobalId, [])
         sized = sorted(spaces, key=lambda s: -(space_geom.get(s.GlobalId, (None, 0.0))[1]))
@@ -582,7 +1227,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
 
         floors.append({
             "name": storey.Name or "?",
-            "elevation_m": round((storey.Elevation or 0.0) * scale, 2),
+            "elevation_m": round((storey.Elevation or 0.0) * elev_scale, 2),
             "footprint_area_sqm": _storey_footprint(m, storey, scale),
             "structure": {
                 "walls": types.get("IfcWallStandardCase", 0) + types.get("IfcWall", 0),
@@ -599,9 +1244,19 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "ramp_slopes": sorted(ramp_slopes),
                 "door_widths_m": sorted(set(storey_door_widths)),
                 "door_count": len(storey_door_widths),
+                "unit_suspicious_struct": unit_suspicious,
+                "structural_volume_m3": round(sum((e.get("volume_m3") or 0) for e in elements), 3),
+                "material_volumes": _material_volumes(elements),
+                "qty_by_type": _qty_by_type(elements),
             },
             "rooms": rooms,
             "structural_elements": elements,
+            "plan_elements": plan_elems,
+            "clashes": clashes,
+            "pipes": pipes,
+            "ducts": ducts,
+            "electrical_equipment": equip,
+            "electrical_elements": electrical,
         })
 
     footprint = max((f["footprint_area_sqm"] for f in floors), default=0.0)
@@ -636,6 +1291,12 @@ def build_review_data(struct, rooms_template=None, floor_room_map=None):
             "fire_zones": [],
             "structure": f.get("structure"),
             "structural_elements": f.get("structural_elements", []),
+            "plan_elements": f.get("plan_elements", []),
+            "clashes": f.get("clashes", []),
+            "pipes": f.get("pipes", []),
+            "ducts": f.get("ducts", []),
+            "electrical_equipment": f.get("electrical_equipment", []),
+            "electrical_elements": f.get("electrical_elements", []),
         })
     all_ramp_slopes = [s for f in struct.get("floors", [])
                        for s in (f.get("structure") or {}).get("ramp_slopes", [])]

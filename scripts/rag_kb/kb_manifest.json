@@ -243,26 +243,176 @@
         "01_structural_eurocodes": {
           "label": "Structural — SS EN Eurocodes + National Annexes",
           "documents": [
-            { "id": "SG-P-SSEN1990", "standard_no": "SS EN 1990:2008 + NA", "name": "Basis of Structural Design (with Singapore National Annex)", "name_zh": "结构设计基础（含新加坡国家附录）", "authority": "Enterprise Singapore / SSC", "year": 2008, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/", "file": "", "scope": "Base Eurocode 0.", "notes": "Free NA preview available on eShop." },
-            { "id": "SG-P-SSEN1991", "standard_no": "SS EN 1991 + NA", "name": "Actions on Structures (loads) + NA", "name_zh": "结构作用（荷载）", "authority": "Enterprise Singapore / SSC", "year": 2009, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/", "file": "", "scope": "Eurocode 1, several parts.", "notes": "" },
-            { "id": "SG-P-SSEN1992", "standard_no": "SS EN 1992-1-1:2008 + NA", "name": "Design of Concrete Structures + NA", "name_zh": "混凝土结构设计", "authority": "Enterprise Singapore / SSC", "year": 2008, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/Product/SSPdtDetail/90a81f90-f2fe-4ae9-a8b5-50c1ae5b89dd", "file": "", "scope": "Eurocode 2 + SG National Annex.", "notes": "" },
-            { "id": "SG-P-SSEN1993", "standard_no": "SS EN 1993 + NA", "name": "Design of Steel Structures + NA", "name_zh": "钢结构设计", "authority": "Enterprise Singapore / SSC", "year": 2008, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/", "file": "", "scope": "Eurocode 3.", "notes": "" }
+            {
+              "id": "SG-P-SSEN1990",
+              "standard_no": "SS EN 1990:2008 + NA",
+              "name": "Basis of Structural Design (with Singapore National Annex)",
+              "name_zh": "结构设计基础（含新加坡国家附录）",
+              "authority": "Enterprise Singapore / SSC",
+              "year": 2008,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/",
+              "file": "",
+              "scope": "Base Eurocode 0.",
+              "notes": "Free NA preview available on eShop."
+            },
+            {
+              "id": "SG-P-SSEN1991",
+              "standard_no": "SS EN 1991 + NA",
+              "name": "Actions on Structures (loads) + NA",
+              "name_zh": "结构作用（荷载）",
+              "authority": "Enterprise Singapore / SSC",
+              "year": 2009,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/",
+              "file": "",
+              "scope": "Eurocode 1, several parts.",
+              "notes": ""
+            },
+            {
+              "id": "SG-P-SSEN1992",
+              "standard_no": "SS EN 1992-1-1:2008 + NA",
+              "name": "Design of Concrete Structures + NA",
+              "name_zh": "混凝土结构设计",
+              "authority": "Enterprise Singapore / SSC",
+              "year": 2008,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/Product/SSPdtDetail/90a81f90-f2fe-4ae9-a8b5-50c1ae5b89dd",
+              "file": "",
+              "scope": "Eurocode 2 + SG National Annex.",
+              "notes": ""
+            },
+            {
+              "id": "SG-P-SSEN1993",
+              "standard_no": "SS EN 1993 + NA",
+              "name": "Design of Steel Structures + NA",
+              "name_zh": "钢结构设计",
+              "authority": "Enterprise Singapore / SSC",
+              "year": 2008,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/",
+              "file": "",
+              "scope": "Eurocode 3.",
+              "notes": ""
+            }
           ]
         },
         "02_mep": {
           "label": "MEP / Electrical / Lighting",
           "documents": [
-            { "id": "SG-P-SS638", "standard_no": "SS 638:2018 (ex CP 5)", "name": "Code of Practice for Electrical Installations", "name_zh": "电气装置实施规程（原 CP 5）", "authority": "Enterprise Singapore / EMA", "year": 2018, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/", "file": "", "scope": "Replaces CP 5:1998; EMA-mandated wiring code.", "notes": "Update project rule code_refs that still cite 'CP 5'." },
-            { "id": "SG-P-SS563", "standard_no": "SS 563", "name": "Code of Practice for Emergency Lighting", "name_zh": "应急照明规范", "authority": "Enterprise Singapore / SSC", "year": null, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/", "file": "", "scope": "Emergency / escape lighting.", "notes": "Correct downstream ref for emergency lighting (NOT SS 551 / SS 575)." },
-            { "id": "SG-P-SS575", "standard_no": "SS 575 (ex CP 29)", "name": "Code of Practice for Fire Hydrant Systems and Hose Reels", "name_zh": "消防栓与消防卷盘系统规范", "authority": "Enterprise Singapore / SSC", "year": null, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/", "file": "", "scope": "Fire hydrant systems.", "notes": "Correct use: fire water tank capacity ref. NOT for emergency lighting." },
-            { "id": "SG-P-SS551", "standard_no": "SS 551:2022", "name": "Code of Practice for Earthing / Protection against Lightning", "name_zh": "接地/防雷规范", "authority": "Enterprise Singapore / SSC", "year": 2022, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/Product/GetPdf?fileName=230204125411SS%20551-2022%20Preview.pdf", "file": "", "scope": "Earthing.", "notes": "Project rule wrongly cites SS 551 for emergency lighting — flag in cleaning pass." },
-            { "id": "SG-P-SS531", "standard_no": "SS 531 (parts 1-3)", "name": "Lighting of Work Places", "name_zh": "工作场所照明", "authority": "Enterprise Singapore / SSC", "year": 2006, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/Product/GetPdf?fileName=180331110851SS%20531-1-2006%282013%29_Preview.pdf", "file": "", "scope": "Workplace lighting.", "notes": "" }
+            {
+              "id": "SG-P-SS638",
+              "standard_no": "SS 638:2018 (ex CP 5)",
+              "name": "Code of Practice for Electrical Installations",
+              "name_zh": "电气装置实施规程（原 CP 5）",
+              "authority": "Enterprise Singapore / EMA",
+              "year": 2018,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/",
+              "file": "",
+              "scope": "Replaces CP 5:1998; EMA-mandated wiring code.",
+              "notes": "Update project rule code_refs that still cite 'CP 5'."
+            },
+            {
+              "id": "SG-P-SS563",
+              "standard_no": "SS 563",
+              "name": "Code of Practice for Emergency Lighting",
+              "name_zh": "应急照明规范",
+              "authority": "Enterprise Singapore / SSC",
+              "year": null,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/",
+              "file": "",
+              "scope": "Emergency / escape lighting.",
+              "notes": "Correct downstream ref for emergency lighting (NOT SS 551 / SS 575)."
+            },
+            {
+              "id": "SG-P-SS575",
+              "standard_no": "SS 575 (ex CP 29)",
+              "name": "Code of Practice for Fire Hydrant Systems and Hose Reels",
+              "name_zh": "消防栓与消防卷盘系统规范",
+              "authority": "Enterprise Singapore / SSC",
+              "year": null,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/",
+              "file": "",
+              "scope": "Fire hydrant systems.",
+              "notes": "Correct use: fire water tank capacity ref. NOT for emergency lighting."
+            },
+            {
+              "id": "SG-P-SS551",
+              "standard_no": "SS 551:2022",
+              "name": "Code of Practice for Earthing / Protection against Lightning",
+              "name_zh": "接地/防雷规范",
+              "authority": "Enterprise Singapore / SSC",
+              "year": 2022,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/Product/GetPdf?fileName=230204125411SS%20551-2022%20Preview.pdf",
+              "file": "",
+              "scope": "Earthing.",
+              "notes": "Project rule wrongly cites SS 551 for emergency lighting — flag in cleaning pass."
+            },
+            {
+              "id": "SG-P-SS531",
+              "standard_no": "SS 531 (parts 1-3)",
+              "name": "Lighting of Work Places",
+              "name_zh": "工作场所照明",
+              "authority": "Enterprise Singapore / SSC",
+              "year": 2006,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/Product/GetPdf?fileName=180331110851SS%20531-1-2006%282013%29_Preview.pdf",
+              "file": "",
+              "scope": "Workplace lighting.",
+              "notes": ""
+            }
           ]
         },
         "03_energy_building_services": {
           "label": "Energy / Building Services",
           "documents": [
-            { "id": "SG-P-SS530", "standard_no": "SS 530:2024 (ex CP 24)", "name": "Code of Practice for Energy Efficiency of Building Services & Equipment", "name_zh": "建筑机电设备能效规范", "authority": "Enterprise Singapore / SSC", "year": 2024, "status": "current", "priority": 1, "access": "paid", "language": "en", "source": "https://www.singaporestandardseshop.sg/", "file": "", "scope": "Energy efficiency for building services.", "notes": "" }
+            {
+              "id": "SG-P-SS530",
+              "standard_no": "SS 530:2024 (ex CP 24)",
+              "name": "Code of Practice for Energy Efficiency of Building Services & Equipment",
+              "name_zh": "建筑机电设备能效规范",
+              "authority": "Enterprise Singapore / SSC",
+              "year": 2024,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "en",
+              "source": "https://www.singaporestandardseshop.sg/",
+              "file": "",
+              "scope": "Energy efficiency for building services.",
+              "notes": ""
+            }
           ]
         }
       }
@@ -287,7 +437,9 @@
               "source": "https://www.gov.cn/zhengce/zhengceku/2023-01/30/5739161/files/b1fb02d581bd4c2c866b488ea730c652.pdf",
               "file": "GB_55037-2022_建筑防火通用规范.pdf",
               "scope": "Fully mandatory. Since 2023-06-01 repeals most mandatory clauses of GB 50016 (fire compartment, evacuation, exits, fire lanes), GB 50067, etc.",
-              "notes": "Downloaded — official gov.cn PDF (66 pages, 65.7 MB). OCR'd to GB_55037-2022_建筑防火通用规范.txt (36921 chars, scanned PDF has no text layer) via scripts/rag_kb/ocr_pdf.py. NOT on openstd.samr.gov.cn (that covers 国家标准, not 工程建设规范)."
+              "notes": "Downloaded — official gov.cn PDF (66 pages, 65.7 MB). OCR'd to GB_55037-2022_建筑防火通用规范.txt (36921 chars, scanned PDF has no text layer) via scripts/rag_kb/ocr_pdf.py. NOT on openstd.samr.gov.cn (that covers 国家标准, not 工程建设规范).",
+              "authority_en": "MOHURD / SAMR",
+              "notes_en": "Downloaded — official gov.cn PDF (66 pages, 65.7 MB). OCR'd to a .txt sidecar (36,921 chars; the scanned PDF has no text layer) via scripts/rag_kb/ocr_pdf.py. Not on openstd.samr.gov.cn (that site covers national standards, not the mandatory engineering construction codes)."
             },
             {
               "id": "CN-GB55036",
@@ -303,7 +455,9 @@
               "source": "http://cgj.dazhou.gov.cn/uploadfile/1/Attachment/f1f6a23014.pdf",
               "file": "GB_55036-2022_消防设施通用规范.pdf",
               "scope": "Fully mandatory, eff. 2023-03-01. Repeals mandatory clauses of GB 50974-2014, GB 50116-2013, GB 51309-2018, GB 50084-2017, etc.",
-              "notes": "Downloaded — gov-hosted mirror (达州市, 16.6 MB, 37 sheets); content verified as GB 55036 announcement text. Original: 住建部 公告 2022年第116号."
+              "notes": "Downloaded — gov-hosted mirror (达州市, 16.6 MB, 37 sheets); content verified as GB 55036 announcement text. Original: 住建部 公告 2022年第116号.",
+              "authority_en": "MOHURD / SAMR",
+              "notes_en": "Downloaded — gov-hosted mirror (16.6 MB, 37 sheets); content verified as the GB 55036 announcement text. Original: MOHURD Announcement No. 116, 2022."
             }
           ]
         }
@@ -315,33 +469,228 @@
         "01_fire_design": {
           "label": "Fire Protection Design",
           "documents": [
-            { "id": "CN-GB50016", "standard_no": "GB 50016-2014 (2018年版)", "name": "建筑设计防火规范", "name_en": "Code for Fire Protection Design of Buildings", "authority": "住建部", "year": 2014, "status": "reference", "priority": 1, "access": "paid", "language": "zh", "source": "http://www.chinabuilding.com.cn/article-3823.html", "file": "", "scope": "Detailed design (compartment area, travel distance, exits, door width). Mandatory clauses now in GB 55037.", "notes": "Paid (中国计划出版社). RAG uses it as design detail; values cross-checked vs GB 55037." },
-            { "id": "CN-GB50974", "standard_no": "GB 50974-2014", "name": "消防给水及消火栓系统技术规范", "name_en": "Fire Water Supply & Hydrant Systems", "authority": "住建部", "year": 2014, "status": "reference", "priority": 1, "access": "paid", "language": "zh", "source": "http://www.chinabuilding.com.cn/article-4294.html", "file": "", "scope": "Fire water tank volume etc. Mandatory clauses in GB 55036.", "notes": "" },
-            { "id": "CN-GB51309", "standard_no": "GB 51309-2018", "name": "消防应急照明和疏散指示系统技术标准", "name_en": "Emergency Lighting & Evacuation Indication Systems", "authority": "住建部", "year": 2018, "status": "reference", "priority": 1, "access": "paid", "language": "zh", "source": "", "file": "", "scope": "Emergency lighting duration (90 min). Mandatory clauses in GB 55036.", "notes": "" },
-            { "id": "CN-GB50116", "standard_no": "GB 50116-2013", "name": "火灾自动报警系统设计规范", "name_en": "Automatic Fire Alarm Systems", "authority": "住建部", "year": 2013, "status": "reference", "priority": 1, "access": "paid", "language": "zh", "source": "https://www.mohurd.gov.cn/gongkai/zc/wjk/art/2015/art_17339_224820.html", "file": "", "scope": "Fire detection & alarm. Mandatory clauses in GB 55036.", "notes": "" },
-            { "id": "CN-GB50067", "standard_no": "GB 50067-2014", "name": "汽车库、修车库、停车场设计防火规范", "name_en": "Garages, Repair Shops, Parking Lots — Fire Protection", "authority": "住建部", "year": 2014, "status": "reference", "priority": 1, "access": "paid", "language": "zh", "source": "http://www.chinabuilding.com.cn/article-4294.html", "file": "", "scope": "Car park fire protection. Mandatory clauses in GB 55037.", "notes": "" }
+            {
+              "id": "CN-GB50016",
+              "standard_no": "GB 50016-2014 (2018年版)",
+              "name": "建筑设计防火规范",
+              "name_en": "Code for Fire Protection Design of Buildings",
+              "authority": "住建部",
+              "year": 2014,
+              "status": "reference",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "http://www.chinabuilding.com.cn/article-3823.html",
+              "file": "",
+              "scope": "Detailed design (compartment area, travel distance, exits, door width). Mandatory clauses now in GB 55037.",
+              "notes": "Paid (中国计划出版社). RAG uses it as design detail; values cross-checked vs GB 55037.",
+              "authority_en": "MOHURD",
+              "notes_en": "Paid (China Planning Press). RAG uses it for design detail; values cross-checked against GB 55037.",
+              "standard_no_en": "GB 50016-2014 (2018 ed.)"
+            },
+            {
+              "id": "CN-GB50974",
+              "standard_no": "GB 50974-2014",
+              "name": "消防给水及消火栓系统技术规范",
+              "name_en": "Technical Code for Fire Water Supply and Hydrant Systems",
+              "authority": "住建部",
+              "year": 2014,
+              "status": "reference",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "http://www.chinabuilding.com.cn/article-4294.html",
+              "file": "",
+              "scope": "Fire water tank volume etc. Mandatory clauses in GB 55036.",
+              "notes": "",
+              "authority_en": "MOHURD"
+            },
+            {
+              "id": "CN-GB51309",
+              "standard_no": "GB 51309-2018",
+              "name": "消防应急照明和疏散指示系统技术标准",
+              "name_en": "Technical Standard for Fire Emergency Lighting and Evacuation Indication Systems",
+              "authority": "住建部",
+              "year": 2018,
+              "status": "reference",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Emergency lighting duration (90 min). Mandatory clauses in GB 55036.",
+              "notes": "",
+              "authority_en": "MOHURD"
+            },
+            {
+              "id": "CN-GB50116",
+              "standard_no": "GB 50116-2013",
+              "name": "火灾自动报警系统设计规范",
+              "name_en": "Code for Design of Automatic Fire Alarm Systems",
+              "authority": "住建部",
+              "year": 2013,
+              "status": "reference",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "https://www.mohurd.gov.cn/gongkai/zc/wjk/art/2015/art_17339_224820.html",
+              "file": "",
+              "scope": "Fire detection & alarm. Mandatory clauses in GB 55036.",
+              "notes": "",
+              "authority_en": "MOHURD"
+            },
+            {
+              "id": "CN-GB50067",
+              "standard_no": "GB 50067-2014",
+              "name": "汽车库、修车库、停车场设计防火规范",
+              "name_en": "Code for Fire Protection Design of Garages, Repair Shops and Parking Areas",
+              "authority": "住建部",
+              "year": 2014,
+              "status": "reference",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "http://www.chinabuilding.com.cn/article-4294.html",
+              "file": "",
+              "scope": "Car park fire protection. Mandatory clauses in GB 55037.",
+              "notes": "",
+              "authority_en": "MOHURD"
+            }
           ]
         },
         "02_electrical": {
           "label": "Electrical Distribution",
           "documents": [
-            { "id": "CN-GB50054", "standard_no": "GB 50054-2011", "name": "低压配电设计规范", "name_en": "Low-voltage Electrical Installations", "authority": "住建部", "year": 2011, "status": "current", "priority": 1, "access": "paid", "language": "zh", "source": "", "file": "", "scope": "Panel clearances, circuit load. 7 mandatory clauses; not superseded by GB55 series.", "notes": "" },
-            { "id": "CN-GB50055", "standard_no": "GB 50055-2011", "name": "通用用电设备配电设计规范", "name_en": "Electrical Distribution for General-purpose Equipment", "authority": "住建部", "year": 2011, "status": "current", "priority": 1, "access": "paid", "language": "zh", "source": "", "file": "", "scope": "Socket outlet spacing, general equipment. 4 mandatory clauses.", "notes": "" }
+            {
+              "id": "CN-GB50054",
+              "standard_no": "GB 50054-2011",
+              "name": "低压配电设计规范",
+              "name_en": "Code for Design of Low-Voltage Electrical Installations",
+              "authority": "住建部",
+              "year": 2011,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Panel clearances, circuit load. 7 mandatory clauses; not superseded by GB55 series.",
+              "notes": "",
+              "authority_en": "MOHURD"
+            },
+            {
+              "id": "CN-GB50055",
+              "standard_no": "GB 50055-2011",
+              "name": "通用用电设备配电设计规范",
+              "name_en": "Code for Design of Power Distribution for General Electrical Equipment",
+              "authority": "住建部",
+              "year": 2011,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Socket outlet spacing, general equipment. 4 mandatory clauses.",
+              "notes": "",
+              "authority_en": "MOHURD"
+            }
           ]
         },
         "03_structural": {
           "label": "Structural Design (for CN-SG Eurocode comparison)",
           "documents": [
-            { "id": "CN-GB50010", "standard_no": "GB 50010-2010", "name": "混凝土结构设计规范", "name_en": "Concrete Structures", "authority": "住建部", "year": 2010, "status": "current", "priority": 1, "access": "paid", "language": "zh", "source": "", "file": "", "scope": "Concrete design (compare with SS EN 1992).", "notes": "" },
-            { "id": "CN-GB50017", "standard_no": "GB 50017-2017", "name": "钢结构设计标准", "name_en": "Steel Structures", "authority": "住建部", "year": 2017, "status": "current", "priority": 1, "access": "paid", "language": "zh", "source": "", "file": "", "scope": "Steel design (compare with SS EN 1993).", "notes": "" },
-            { "id": "CN-GB50011", "standard_no": "GB 50011-2010 (2016年版)", "name": "建筑抗震设计规范", "name_en": "Seismic Design", "authority": "住建部", "year": 2010, "status": "current", "priority": 1, "access": "paid", "language": "zh", "source": "", "file": "", "scope": "Seismic design.", "notes": "" },
-            { "id": "CN-GB50009", "standard_no": "GB 50009-2012", "name": "建筑结构荷载规范", "name_en": "Structural Loads", "authority": "住建部", "year": 2012, "status": "current", "priority": 1, "access": "paid", "language": "zh", "source": "", "file": "", "scope": "Loads (compare with SS EN 1991).", "notes": "" }
+            {
+              "id": "CN-GB50010",
+              "standard_no": "GB 50010-2010",
+              "name": "混凝土结构设计规范",
+              "name_en": "Code for Design of Concrete Structures",
+              "authority": "住建部",
+              "year": 2010,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Concrete design (compare with SS EN 1992).",
+              "notes": "",
+              "authority_en": "MOHURD"
+            },
+            {
+              "id": "CN-GB50017",
+              "standard_no": "GB 50017-2017",
+              "name": "钢结构设计标准",
+              "name_en": "Standard for Design of Steel Structures",
+              "authority": "住建部",
+              "year": 2017,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Steel design (compare with SS EN 1993).",
+              "notes": "",
+              "authority_en": "MOHURD"
+            },
+            {
+              "id": "CN-GB50011",
+              "standard_no": "GB 50011-2010 (2016年版)",
+              "name": "建筑抗震设计规范",
+              "name_en": "Code for Seismic Design of Buildings",
+              "authority": "住建部",
+              "year": 2010,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Seismic design.",
+              "notes": "",
+              "authority_en": "MOHURD",
+              "standard_no_en": "GB 50011-2010 (2016 ed.)"
+            },
+            {
+              "id": "CN-GB50009",
+              "standard_no": "GB 50009-2012",
+              "name": "建筑结构荷载规范",
+              "name_en": "Load Code for the Design of Building Structures",
+              "authority": "住建部",
+              "year": 2012,
+              "status": "current",
+              "priority": 1,
+              "access": "paid",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Loads (compare with SS EN 1991).",
+              "notes": "",
+              "authority_en": "MOHURD"
+            }
           ]
         },
         "04_deprecated": {
           "label": "Deprecated — DO NOT ingest",
           "documents": [
-            { "id": "CN-GB50045", "standard_no": "GB 50045-95", "name": "高层民用建筑设计防火规范", "name_en": "High-rise Civil Building Fire Protection (REPLACED)", "authority": "住建部", "year": 1995, "status": "deprecated", "priority": 1, "access": "-", "language": "zh", "source": "", "file": "", "scope": "Replaced by GB 50016-2014 since 2015.", "notes": "Must be excluded from KB and purged from any corpus." }
+            {
+              "id": "CN-GB50045",
+              "standard_no": "GB 50045-95",
+              "name": "高层民用建筑设计防火规范",
+              "name_en": "Code for Fire Protection Design of Tall Civil Buildings (withdrawn)",
+              "authority": "住建部",
+              "year": 1995,
+              "status": "deprecated",
+              "priority": 1,
+              "access": "-",
+              "language": "zh",
+              "source": "",
+              "file": "",
+              "scope": "Replaced by GB 50016-2014 since 2015.",
+              "notes": "Must be excluded from KB and purged from any corpus.",
+              "authority_en": "MOHURD"
+            }
           ]
         }
       }

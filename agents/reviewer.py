@@ -12,6 +12,8 @@ paid-index policy.
 
 from pathlib import Path
 
+from core import i18n
+
 REPO = Path(__file__).resolve().parent.parent
 KB = REPO / "data" / "rag_kb"
 
@@ -62,10 +64,27 @@ def _term_for(code_ref):
     return None
 
 
-def _search(code_ref):
+def _search(code_ref, extra=""):
+    """Evidence lookup: semantic retrieval first, keyword fallback.
+
+    Both operate on the free corpus only (paid standards are never indexed).
+    The semantic query combines the standard name with the finding context so
+    the top passage is a relevant clause, not just a title match.
+    """
     term = _term_for(code_ref)
     if not term:
         return None
+    try:
+        from kb.semantic import search as _sem_search
+        from kb.semantic import accept as _accept
+        query = extra.strip() or term
+        res = _sem_search(query, top_k=1)
+        if res and _accept(query, res[0][0], res[0][1]):
+            chunk, score = res[0]
+            snip = chunk["text"][:140].replace("\n", " ").strip()
+            return f"{chunk['doc']} · {i18n.T['sem_score']} {score:.2f}: …{snip}…"
+    except Exception:
+        pass
     for fname, text in _kb_txts():
         if term in text:
             i = text.find(term)
@@ -77,7 +96,8 @@ def _search(code_ref):
 def review_issues(issues):
     """Attach review_status (verified|manual) + evidence to each finding in place."""
     for iss in issues:
-        ev = _search(iss.get("code_ref", ""))
+        extra = " ".join(filter(None, [iss.get("location", ""), iss.get("description", "")]))
+        ev = _search(iss.get("code_ref", ""), extra)
         if ev:
             iss["review_status"] = "verified"
             iss["review_evidence"] = ev

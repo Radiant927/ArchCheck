@@ -4,6 +4,9 @@ Consumed by the BIM Reader agent. A model that fails a fatal check (empty shell,
 no geometry on key elements) should not proceed to compliance review; everything
 else is reported as a score + warnings so the reviewer knows the data's limits
 (e.g. no space boundaries -> door association falls back to geometry).
+
+Messages are stored in both languages (`message` zh / `message_en`) because QA
+runs once at parse time while the UI language can be switched afterwards.
 """
 from .extractor import _length_scale, _PREFIX_SCALE
 
@@ -27,52 +30,75 @@ def _check_units(m, checks):
     if declared is None:
         checks.append(("unit", "warn",
                        f"模型未声明长度单位，已从标高推断为 {'米' if inferred == 1 else '毫米'}。"
-                       "真实 IFC 的声明单位常与实际坐标不一致，建议在建模软件中显式声明。"))
+                       "真实 IFC 的声明单位常与实际坐标不一致，建议在建模软件中显式声明。",
+                       f"No length unit declared; inferred from storey elevations as "
+                       f"{'metres' if inferred == 1 else 'millimetres'}. Real-world IFCs often "
+                       "declare a unit that contradicts the coordinates — declare it explicitly "
+                       "in the authoring tool."))
     elif declared == "METER":
-        checks.append(("unit", "ok", "已声明 SI 长度单位：米（1 单位 = 1m）。"))
+        checks.append(("unit", "ok", "已声明 SI 长度单位：米（1 单位 = 1m）。",
+                       "Declared SI length unit: metre (1 unit = 1 m)."))
     else:
         mult = _PREFIX_SCALE.get(declared, 1.0)
         checks.append(("unit", "ok",
-                       f"已声明 SI 长度单位：{declared}（1 单位 = {mult}m）。"))
+                       f"已声明 SI 长度单位：{declared}（1 单位 = {mult}m）。",
+                       f"Declared SI length unit: {declared} (1 unit = {mult} m)."))
 
 
 def _check_spaces(m, struct, checks):
     n_spaces = len(m.by_type("IfcSpace"))
     floors = struct.get("floors", [])
     if not floors:
-        checks.append(("spaces", "error", "未能解析出任何楼层，模型结构不可用。"))
+        checks.append(("spaces", "error", "未能解析出任何楼层，模型结构不可用。",
+                       "No storeys could be parsed — the model structure is unusable."))
         return
     with_rooms = sum(1 for f in floors if f.get("rooms"))
     if n_spaces == 0:
         checks.append(("spaces", "warn",
-                       "模型没有 IfcSpace 房间数据，房间级审查将跳过，仅执行整楼聚合校核。"))
+                       "模型没有 IfcSpace 房间数据，房间级审查将跳过，仅执行整楼聚合校核。",
+                       "The model has no IfcSpace rooms — room-level checks are skipped; "
+                       "only whole-building aggregate checks run."))
     elif with_rooms == 0:
-        checks.append(("spaces", "warn", "有 IfcSpace 但未归属到楼层，房间无法进入逐层审查。"))
+        checks.append(("spaces", "warn", "有 IfcSpace 但未归属到楼层，房间无法进入逐层审查。",
+                       "IfcSpaces exist but are not assigned to storeys, so rooms cannot "
+                       "enter the per-floor review."))
     elif with_rooms / len(floors) < 0.7:
         checks.append(("spaces", "warn",
                        f"{len(floors) - with_rooms}/{len(floors)} 层无房间数据"
-                       f"（覆盖率 {with_rooms / len(floors):.0%}），部分楼层仅做整楼聚合。"))
+                       f"（覆盖率 {with_rooms / len(floors):.0%}），部分楼层仅做整楼聚合。",
+                       f"{len(floors) - with_rooms}/{len(floors)} storeys have no room data "
+                       f"(coverage {with_rooms / len(floors):.0%}); those floors are covered by "
+                       "building-level aggregates only."))
     else:
         checks.append(("spaces", "ok",
-                       f"{n_spaces} 个空间，{with_rooms}/{len(floors)} 层有房间数据。"))
+                       f"{n_spaces} 个空间，{with_rooms}/{len(floors)} 层有房间数据。",
+                       f"{n_spaces} spaces; {with_rooms}/{len(floors)} storeys carry room data."))
 
 
 def _check_geometry(m, checks):
     key = [e for cls in ("IfcDoor", "IfcWindow", "IfcWall", "IfcWallStandardCase")
            for e in m.by_type(cls)]
     if not key:
-        checks.append(("geometry", "error", "模型不含门/窗/墙构件，无法审查。"))
+        checks.append(("geometry", "error", "模型不含门/窗/墙构件，无法审查。",
+                       "The model contains no door/window/wall elements — review not possible."))
         return
     with_rep = sum(1 for e in key if e.Representation)
     ratio = with_rep / len(key)
     if ratio < 0.5:
         checks.append(("geometry", "error",
                        f"关键构件仅 {with_rep}/{len(key)}（{ratio:.0%}）有几何表示，"
-                       "存在空壳/纯分类引用风险，尺寸类判定将不可信。"))
+                       "存在空壳/纯分类引用风险，尺寸类判定将不可信。",
+                       f"Only {with_rep}/{len(key)} key elements ({ratio:.0%}) carry geometry — "
+                       "risk of an empty shell / classification-only references, so "
+                       "dimension-based checks cannot be trusted."))
     elif ratio < 0.9:
-        checks.append(("geometry", "warn", f"关键构件 {with_rep}/{len(key)} 有几何表示。"))
+        checks.append(("geometry", "warn",
+                       f"关键构件 {with_rep}/{len(key)} 有几何表示。",
+                       f"{with_rep}/{len(key)} key elements carry geometry."))
     else:
-        checks.append(("geometry", "ok", f"关键构件 {with_rep}/{len(key)} 均带几何表示。"))
+        checks.append(("geometry", "ok",
+                       f"关键构件 {with_rep}/{len(key)} 均带几何表示。",
+                       f"All {with_rep}/{len(key)} key elements carry geometry."))
 
 
 def _check_boundaries(m, checks):
@@ -83,13 +109,20 @@ def _check_boundaries(m, checks):
     if bounded == 0:
         checks.append(("boundaries", "warn",
                        "模型没有 IfcRelSpaceBoundary，门-房间关联与疏散距离依赖几何兜底"
-                       "（结果可能不如显式边界精确）。"))
+                       "（结果可能不如显式边界精确）。",
+                       "No IfcRelSpaceBoundary in the model — door-to-room association and "
+                       "egress distances fall back to geometry (less precise than explicit "
+                       "boundaries)."))
     elif bounded / len(spaces) < 0.5:
         checks.append(("boundaries", "warn",
-                       f"仅 {bounded}/{len(spaces)} 空间有空间边界，门关联部分依赖几何兜底。"))
+                       f"仅 {bounded}/{len(spaces)} 空间有空间边界，门关联部分依赖几何兜底。",
+                       f"Only {bounded}/{len(spaces)} spaces have space boundaries; door "
+                       "association partly falls back to geometry."))
     else:
         checks.append(("boundaries", "ok",
-                       f"{bounded}/{len(spaces)} 空间有空间边界，门关联采用精确边界路径。"))
+                       f"{bounded}/{len(spaces)} 空间有空间边界，门关联采用精确边界路径。",
+                       f"{bounded}/{len(spaces)} spaces have space boundaries; door association "
+                       "uses the exact-boundary path."))
 
 
 def validate_model(m, struct):
@@ -105,12 +138,13 @@ def validate_model(m, struct):
     _check_boundaries(m, checks)
 
     score = 100 - sum(_ERROR_PENALTY if lvl == "error" else _WARN_PENALTY
-                      for _, lvl, _ in checks if lvl != "ok")
+                      for _, lvl, _, _ in checks if lvl != "ok")
     score = max(0, min(100, score))
     report = {
         "score": score,
-        "fatal": any(lvl == "error" for _, lvl, _ in checks),
-        "checks": [{"id": cid, "level": lvl, "message": msg} for cid, lvl, msg in checks],
+        "fatal": any(lvl == "error" for _, lvl, _, _ in checks),
+        "checks": [{"id": cid, "level": lvl, "message": msg, "message_en": msg_en}
+                   for cid, lvl, msg, msg_en in checks],
         "stats": {
             "storeys": len(m.by_type("IfcBuildingStorey")),
             "spaces": len(m.by_type("IfcSpace")),

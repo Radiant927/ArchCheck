@@ -2,16 +2,16 @@ import io
 import base64
 from datetime import datetime
 from core.config import C
-from core.i18n import _I18N, LANG
+from core import i18n
 
-def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, structural_r, conflicts, std_meta):
-    t = _I18N[LANG]
-    sev_map = {"High": ("高", "high") if LANG == "zh" else ("High", "high"),
-               "Medium": ("中", "mid") if LANG == "zh" else ("Medium", "mid"),
-               "Low": ("低", "low") if LANG == "zh" else ("Low", "low"),
-               "Missing": ("数据缺失", "mid") if LANG == "zh" else ("Data Missing", "mid")}
-    priority_label = "优先处理" if LANG == "zh" else "PRIORITY"
-    html_lang = "zh" if LANG == "zh" else "en"
+def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, structural_r, mep_r, conflicts, std_meta):
+    t = i18n._I18N[i18n.LANG]
+    sev_map = {"High": ("高", "high") if i18n.LANG == "zh" else ("High", "high"),
+               "Medium": ("中", "mid") if i18n.LANG == "zh" else ("Medium", "mid"),
+               "Low": ("低", "low") if i18n.LANG == "zh" else ("Low", "low"),
+               "Missing": ("数据缺失", "mid") if i18n.LANG == "zh" else ("Data Missing", "mid")}
+    priority_label = "优先处理" if i18n.LANG == "zh" else "PRIORITY"
+    html_lang = "zh" if i18n.LANG == "zh" else "en"
 
     floors_html = ""
     for fname, img in images_by_floor.items():
@@ -22,7 +22,7 @@ def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, str
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     std_label = f'{std_meta.get("flag","")} {std_meta.get("name","")}'
-    report_header = "ARCHCHECK · 审查报告" if LANG == "zh" else "ARCHCHECK · REPORT"
+    report_header = "ARCHCHECK · 审查报告" if i18n.LANG == "zh" else "ARCHCHECK · REPORT"
 
     def rows(items, cls):
         out = ""
@@ -69,9 +69,10 @@ def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, str
     no_eee = f'<div class="card" style="border-left:4px solid #7CB342;background:#EEF5E2;"><span class="title" style="color:#7CB342;">{t["report_no_eee"]}</span></div>'
     no_bld = f'<div class="card" style="border-left:4px solid #7CB342;background:#EEF5E2;"><span class="title" style="color:#7CB342;">{t["report_no_bld"]}</span></div>'
     no_str = f'<div class="card" style="border-left:4px solid #7CB342;background:#EEF5E2;"><span class="title" style="color:#7CB342;">{t["report_no_str"]}</span></div>'
+    no_mep = f'<div class="card" style="border-left:4px solid #7CB342;background:#EEF5E2;"><span class="title" style="color:#7CB342;">{t["report_no_mep"]}</span></div>'
     no_cnf = f'<div class="card" style="border-left:4px solid #7CB342;background:#EEF5E2;"><span class="title" style="color:#7CB342;">{t["report_no_conf"]}</span></div>'
 
-    label_css = "" if LANG == "en" else "text-transform:none;letter-spacing:.12em;"
+    label_css = "" if i18n.LANG == "en" else "text-transform:none;letter-spacing:.12em;"
 
     return f"""<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>ArchCheck {t["report_title"]}</title><style>
 *{{margin:0;padding:0;box-sizing:border-box;}}
@@ -91,9 +92,9 @@ h3{{font-size:18px;font-weight:600;margin:20px 0 8px;color:{C["muted"]};}}
 .img-box{{text-align:center;margin:16px 0;}}.img-box img{{max-width:100%;border-radius:4px;border:1px solid {C["border"]};}}
 .card{{background:#FFF;border:1px solid {C["border"]};border-radius:2px;padding:14px 18px;margin-bottom:8px;}}
 .card.civ{{border-left:4px solid {C["blue"]};}}.card.eee{{border-left:4px solid {C["orange"]};}}
-.card.bld{{border-left:4px solid {C["purple"]};background:#F8F5FC;}}.card.str{{border-left:4px solid {C["green"]};background:#F0F7E9;}}.card.cnf{{border-left:4px solid {C["red"]};background:#FEF2F2;}}
+.card.bld{{border-left:4px solid {C["purple"]};background:#F8F5FC;}}.card.str{{border-left:4px solid {C["green"]};background:#F0F7E9;}}.card.mep{{border-left:4px solid #1f6f8b;background:#EFF7FA;}}.card.cnf{{border-left:4px solid {C["red"]};background:#FEF2F2;}}
 .card .title{{font-weight:700;font-size:15px;}}.card.civ .title{{color:{C["blue"]};}}.card.eee .title{{color:{C["orange"]};}}
-.card.bld .title{{color:{C["purple"]};}}.card.str .title{{color:{C["green"]};}}.card.cnf .title{{color:{C["red"]};}}
+.card.bld .title{{color:{C["purple"]};}}.card.str .title{{color:{C["green"]};}}.card.mep .title{{color:#1f6f8b;}}.card.cnf .title{{color:{C["red"]};}}
 .card .desc{{font-size:14px;color:{C["muted"]};margin-top:4px;}}.card .meta{{font-size:13px;color:{C["silver"]};margin-top:4px;font-family:monospace;}}
 .sev{{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:600;}}
 .sev-high{{background:#FEF2F2;color:{C["red"]};}}.sev-mid{{background:#FFF7ED;color:{C["orange"]};}}.sev-low{{background:#F9FAFB;color:{C["silver"]};}}
@@ -104,11 +105,12 @@ h3{{font-size:18px;font-weight:600;margin:20px 0 8px;color:{C["muted"]};}}
 <div class="std-badge">{std_label}</div>
 <h1>{t["report_title"]}</h1><div class="subtitle">{t["report_sub"]} · {now}</div>
 <div class="stats">
-<div class="stat"><div class="val">{len(civil_r)+len(eee_r)+len(building_r)+len(structural_r)}</div><div class="lbl">{t["report_total"]}</div></div>
+<div class="stat"><div class="val">{len(civil_r)+len(eee_r)+len(building_r)+len(structural_r)+len(mep_r)}</div><div class="lbl">{t["report_total"]}</div></div>
 <div class="stat c"><div class="val">{len(civil_r)}</div><div class="lbl">{t["s_civil"]}</div></div>
 <div class="stat e"><div class="val">{len(eee_r)}</div><div class="lbl">{t["s_eee"]}</div></div>
 <div class="stat b"><div class="val">{len(building_r)}</div><div class="lbl">{t["s_bld"]}</div></div>
 <div class="stat b"><div class="val">{len(structural_r)}</div><div class="lbl">{t["s_str"]}</div></div>
+<div class="stat b"><div class="val">{len(mep_r)}</div><div class="lbl">{t["s_mep"]}</div></div>
 <div class="stat r"><div class="val">{len(conflicts)}</div><div class="lbl">{t["s_conf"]}</div></div>
 </div>
 <h2>{t["report_annotated"]}</h2>
@@ -121,6 +123,8 @@ h3{{font-size:18px;font-weight:600;margin:20px 0 8px;color:{C["muted"]};}}
 {rows(building_r,'bld') if building_r else no_bld}
 <h2>{t["report_str_h"]}</h2>
 {rows(structural_r,'str') if structural_r else no_str}
+<h2>{t["report_mep_h"]}</h2>
+{rows(mep_r,'mep') if mep_r else no_mep}
 <h2>{t["report_conf_h"]}</h2>
 {crow(conflicts) if conflicts else no_cnf}
 <div class="footer">{t["report_footer"]}</div>
