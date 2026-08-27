@@ -105,7 +105,8 @@ def _rule_applies(rule, item):
     return bool(OPERATORS[rule["condition_operator"]](cv, rule["condition_threshold"]))
 
 
-def run_rules(rules, item, prefix, scope, floor_id=None, floor_name=None, coverage=None):
+def run_rules(rules, item, prefix, scope, floor_id=None, floor_name=None, coverage=None,
+              tally=None):
     """Run a rule set against one item.
 
     ``scope`` is the element type being judged (room / zone / equipment / structure /
@@ -116,6 +117,10 @@ def run_rules(rules, item, prefix, scope, floor_id=None, floor_name=None, covera
     When a rule applies to the item but the judged field is absent from the model,
     it is recorded into ``coverage`` (rule_id -> stats) instead of silently skipped —
     this is what turns "dead rules" into an honest "未检查（缺字段）" report.
+
+    ``tally`` counts, per rule, how many items were actually judged vs. had a null
+    value, so ``run_full_review`` can tell a rule-level gap (nothing judged) from
+    per-item data defects (some judged) and aggregate only the former.
     """
     violations = []
     default_scope = _DEFAULT_SCOPE.get(prefix, "room")
@@ -150,8 +155,19 @@ def run_rules(rules, item, prefix, scope, floor_id=None, floor_name=None, covera
             if not OPERATORS[rule["condition_operator"]](cond_value, cond_threshold):
                 continue
         value = item[field]
+        room_name = item.get("name", item.get("id", "?"))
+        if tally is not None:
+            t = tally.setdefault(rule["id"], {
+                "title": rule["name"], "code_ref": rule["code_ref"], "field": field,
+                "prefix": prefix, "judged": 0, "null": 0, "locations": [],
+            })
+        else:
+            t = None
         if value is None:
-            room_name = item.get("name", item.get("id", "?"))
+            if t is not None:
+                t["null"] += 1
+                if len(t["locations"]) < 5 and str(room_name) not in t["locations"]:
+                    t["locations"].append(str(room_name))
             violations.append({
                 "title": rule["name"],
                 "description": i18n._I18N[i18n.LANG]["rule_data_missing"].format(field=field),
@@ -162,11 +178,12 @@ def run_rules(rules, item, prefix, scope, floor_id=None, floor_name=None, covera
                 "floor_name": floor_name,
             })
             continue
+        if t is not None:
+            t["judged"] += 1
         threshold = steward.resolve_threshold(rule, item)
         op_func = OPERATORS[rule["operator"]]
         if op_func(value, threshold):
             continue
-        room_name = item.get("name", item.get("id", "?"))
         msg = rule["message"].replace("{value}", str(value)).replace("{threshold}", str(threshold)).replace("{room_name}", str(room_name))
         if cond_value is not None:
             msg = msg.replace("{condition_value}", str(cond_value)).replace("{condition_threshold}", str(cond_threshold))
@@ -196,6 +213,7 @@ def run_full_review(bdata):
     mep_results = []
     accessibility_results = []
     coverage = {}
+    tally = {}
     scope_counts = defaultdict(int)
     # how many items each discipline actually judged (0 -> "not checked")
     checked = {"civil": 0, "eee": 0, "structural": 0, "mep": 0, "building": 0,
@@ -209,44 +227,71 @@ def run_full_review(bdata):
             checked["civil"] += 1
             checked["accessibility"] += 1
             scope_counts["room"] += 1
-            civil_results.extend(run_rules(CIVIL_RULES, room, "civil", "room", fid, fname, coverage))
-            accessibility_results.extend(run_rules(ACCESSIBILITY_RULES, room, "accessibility", "room", fid, fname, coverage))
+            civil_results.extend(run_rules(CIVIL_RULES, room, "civil", "room", fid, fname, coverage, tally))
+            accessibility_results.extend(run_rules(ACCESSIBILITY_RULES, room, "accessibility", "room", fid, fname, coverage, tally))
         eqs = floor.get("electrical_elements", [])
         checked["eee"] += len(eqs)
         scope_counts["equipment"] += len(eqs)
         for eq in eqs:
-            eee_results.extend(run_rules(EEE_RULES, eq, "eee", "equipment", fid, fname, coverage))
+            eee_results.extend(run_rules(EEE_RULES, eq, "eee", "equipment", fid, fname, coverage, tally))
         zones = floor.get("fire_zones", [])
         scope_counts["zone"] += len(zones)
         for zone in zones:
             checked["civil"] += 1
-            civil_results.extend(run_rules(CIVIL_RULES, zone, "civil", "zone", fid, fname, coverage))
+            civil_results.extend(run_rules(CIVIL_RULES, zone, "civil", "zone", fid, fname, coverage, tally))
         elems = floor.get("structural_elements", [])
         checked["structural"] += len(elems)
         scope_counts["structure"] += len(elems)
         for elem in elems:
-            structural_results.extend(run_rules(STRUCTURAL_RULES, elem, "structural", "structure", fid, fname, coverage))
+            structural_results.extend(run_rules(STRUCTURAL_RULES, elem, "structural", "structure", fid, fname, coverage, tally))
         pipes = floor.get("pipes", [])
         ducts = floor.get("ducts", [])
         checked["mep"] += sum(1 for p in pipes if p.get("pipe_type") not in ("unknown",)) + len(ducts)
         scope_counts["pipe"] += len(pipes)
         scope_counts["duct"] += len(ducts)
         for pipe in pipes:
-            mep_results.extend(run_rules(MEP_RULES, pipe, "mep", "pipe", fid, fname, coverage))
+            mep_results.extend(run_rules(MEP_RULES, pipe, "mep", "pipe", fid, fname, coverage, tally))
         for duct in ducts:
-            mep_results.extend(run_rules(MEP_RULES, duct, "mep", "duct", fid, fname, coverage))
+            mep_results.extend(run_rules(MEP_RULES, duct, "mep", "duct", fid, fname, coverage, tally))
 
     bp = bdata.get("building_params", {})
     whole_label = i18n._I18N[i18n.LANG]["whole_building"]
     checked["building"] = 1
     scope_counts["building"] += 1
-    building_results.extend(run_rules(BUILDING_RULES, bp, "building", "building", None, whole_label, coverage))
-    accessibility_results.extend(run_rules(ACCESSIBILITY_RULES, bp, "accessibility", "building", None, whole_label, coverage))
+    building_results.extend(run_rules(BUILDING_RULES, bp, "building", "building", None, whole_label, coverage, tally))
+    accessibility_results.extend(run_rules(ACCESSIBILITY_RULES, bp, "accessibility", "building", None, whole_label, coverage, tally))
+
+    # A rule whose field exists but is null on *every* element it applied to is a
+    # rule-level gap, not N per-element defects — collapse it into the coverage
+    # report so a discipline-only model (e.g. an MEP-only file with no doors at all)
+    # does not flood the list with 42 identical "data missing" rows. Partial gaps
+    # stay per-element: those name the specific rooms worth fixing.
+    collapsed = {rid: t for rid, t in tally.items() if t["judged"] == 0 and t["null"] > 0}
+    if collapsed:
+        for lst in (civil_results, eee_results, building_results,
+                    structural_results, mep_results, accessibility_results):
+            lst[:] = [f for f in lst
+                      if not (f.get("severity") == "Missing" and f.get("rule_id") in collapsed)]
 
     # coverage report — rules that exist but could not judge because the model
     # lacks their field (per-rule aggregation) or their element scope entirely.
     coverage_findings = []
     empty_scope_rules = defaultdict(list)
+    for rid, t in collapsed.items():
+        if rid in coverage:
+            coverage[rid]["count"] += t["null"]
+            continue
+        coverage_findings.append({
+            "title": f'{t["title"]}（未检查）',
+            "description": (f'模型提取到字段 {t["field"]} 但所有 {t["null"]} 个元素都没有值，'
+                            f'无一可判定。补齐该字段的取值后规则将自动启用。'),
+            "location": "、".join(t["locations"]) or "—",
+            "severity": "NotChecked",
+            "code_ref": t["code_ref"],
+            "type": t["prefix"],
+            "rule_id": rid,
+            "floor_name": None,
+        })
     for rid, c in coverage.items():
         loc = "、".join(c["locations"]) or "—"
         coverage_findings.append({
@@ -295,7 +340,8 @@ def run_full_review(bdata):
     unit_susp = sum((fl.get("structure") or {}).get("unit_suspicious_struct", 0)
                     for fl in bdata.get("floors", []))
 
-    all_issues = civil_results + eee_results + building_results + structural_results + mep_results
+    all_issues = (civil_results + eee_results + building_results + structural_results
+                  + mep_results + accessibility_results)
 
     # Conflict detection: same floor AND same location has both civil + eee
     loc_map = defaultdict(list)
