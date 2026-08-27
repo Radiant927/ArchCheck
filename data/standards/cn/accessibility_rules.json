@@ -1,0 +1,64 @@
+[
+  {
+    "id": "ACC-001",
+    "name": "无障碍卫生间检查",
+    "description": "公共建筑应设置无障碍卫生间（待提取 accessible_toilet_count 字段）",
+    "scope": "building",
+    "field": "accessible_toilet_count",
+    "operator": ">=",
+    "threshold": 1,
+    "severity": "Medium",
+    "code_ref": "GB 50763",
+    "message": "建筑未设置无障碍卫生间，应至少设置 1 个。"
+  },
+  {
+    "id": "ACC-002",
+    "name": "无障碍停车位检查",
+    "description": "公共建筑应设置无障碍停车位（待提取 accessible_parking_count 字段）",
+    "scope": "building",
+    "field": "accessible_parking_count",
+    "operator": ">=",
+    "threshold": 1,
+    "severity": "Medium",
+    "code_ref": "GB 50763",
+    "message": "建筑未设置无障碍停车位，应至少设置 1 个。"
+  },
+  {
+    "id": "ACC-003",
+    "name": "无障碍走廊净宽检查",
+    "description": "无障碍通行走廊净宽不应小于 1.2m（待提取 accessible_corridor_width_m 字段）",
+    "scope": "room",
+    "field": "accessible_corridor_width_m",
+    "operator": ">=",
+    "threshold": 1.2,
+    "unit": "m",
+    "severity": "Medium",
+    "code_ref": "GB 50763",
+    "message": "{room_name} 无障碍通行宽度不足 {threshold}m。"
+  },
+  {
+    "id": "ACC-004",
+    "name": "无障碍电梯检查",
+    "description": "多、高层公共建筑应设置无障碍电梯（待提取 accessible_elevator_count 字段）",
+    "scope": "building",
+    "field": "accessible_elevator_count",
+    "operator": ">=",
+    "threshold": 1,
+    "severity": "Medium",
+    "code_ref": "GB 50763",
+    "message": "建筑未设置无障碍电梯，应至少设置 1 部。"
+  },
+  {
+    "id": "ACC-005",
+    "name": "无障碍坡道净宽检查",
+    "description": "无障碍坡道净宽不应小于 1.0m（待提取 accessible_ramp_width_m 字段）",
+    "scope": "building",
+    "field": "accessible_ramp_width_m",
+    "operator": ">=",
+    "threshold": 1.0,
+    "unit": "m",
+    "severity": "Medium",
+    "code_ref": "GB 50763",
+    "message": "无障碍坡道净宽不足 {threshold}m。"
+  }
+]

@@ -132,6 +132,8 @@ div[data-testid="stStatus"] {{
 .tag-disc-eee {{ background:{C["orange"]}18; color:{C["orange"]}; }}
 .tag-disc-building {{ background:{C["purple"]}18; color:{C["purple"]}; }}
 .tag-disc-structural {{ background:{C["green"]}18; color:{C["green"]}; }}
+.tag-disc-mep {{ background:{C["blue"]}22; color:#1f6f8b; }}
+.tag-disc-accessibility {{ background:#B0804018; color:#8a6d00; }}
 .tag-disc-conflict {{ background:{C["red"]}18; color:{C["red"]}; }}
 .tag-sev-high {{ background:{C["red"]}18; color:{C["red"]}; }}
 .tag-sev-medium {{ background:{C["orange"]}18; color:{C["orange"]}; }}
@@ -194,6 +196,8 @@ defaults = {
     "eee_results": [],
     "building_results": [],
     "structural_results": [],
+    "mep_results": [],
+    "discipline_checked": {},
     "conflicts": [],
     "all_issues": [],
     "building_data": None,
@@ -246,26 +250,29 @@ def _render_params_editor(bdata):
             updated_rooms = []
             for room in floor.get("rooms", []):
                 rid = room["id"]
+                _esrc = "🟢" if room.get("eee_src") == "model" else "🟠"
                 st.markdown(
                     f'<span style="font-weight:700;font-size:14px;">{room["name"]}</span> '
                     f'<span style="color:{C["silver"]};font-size:12px;">({_room_type_label(room["type"])})</span>',
                     unsafe_allow_html=True,
                 )
                 a1, a2, a3, a4 = st.columns(4)
-                area = a1.number_input(f"🟢 {T['p_area']}", value=float(room.get("room_area_sqm", 0)), key=f"{rid}_a", step=5.0)
-                exits = a2.number_input(f"🟢 {T['p_exits']}", value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=50)
+                area = a1.number_input(f"🟢 {T['p_area']}", value=float(room.get("room_area_sqm") or 0), key=f"{rid}_a", step=5.0)
+                exits = a2.number_input(f"🟢 {T['p_exits']}", value=int(room.get("exit_count") or 1), key=f"{rid}_x", min_value=0, max_value=500)
                 corr = a3.number_input(f"🟢 {T['p_corridor']}", value=float(room.get("corridor_length_m", 0)), key=f"{rid}_c", step=1.0)
-                light = a4.checkbox(f"🟠 {T['p_light']}", value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
+                light = a4.checkbox(f"{_esrc} {T['p_light']}", value=bool(room.get("has_emergency_light", False)), key=f"{rid}_l")
                 b1, b2, b3, b4 = st.columns(4)
-                water = b1.number_input(f"🟠 {T['p_water']}", value=float(room.get("dist_to_water_m", 5.0)), key=f"{rid}_w", step=0.1)
-                circuit = b2.number_input(f"🟠 {T['p_load']}", value=float(room.get("circuit_load_a", 10)), key=f"{rid}_ld", step=1.0)
-                outlet = b3.number_input(f"🟠 {T['p_outlet']}", value=float(room.get("outlet_spacing_m", 5.0)), key=f"{rid}_o", step=0.5)
+                water = b1.number_input(f"{_esrc} {T['p_water']}", value=float(room.get("dist_to_water_m", 5.0)), key=f"{rid}_w", step=0.1)
+                circuit = b2.number_input(f"{_esrc} {T['p_load']}", value=float(room.get("circuit_load_a", 10)), key=f"{rid}_ld", step=1.0)
+                outlet = b3.number_input(f"{_esrc} {T['p_outlet']}", value=float(room.get("outlet_spacing_m", 5.0)), key=f"{rid}_o", step=0.5)
                 door = b4.number_input(f"🟢 {T['p_door']}", value=float(room.get("door_width_m") or 1.0), key=f"{rid}_d", step=0.1)
                 updated_rooms.append({
                     "id": rid, "name": room["name"], "type": room["type"],
                     "room_area_sqm": area, "exit_count": exits, "corridor_length_m": corr,
                     "door_width_m": door, "has_emergency_light": light,
                     "dist_to_water_m": water, "circuit_load_a": circuit, "outlet_spacing_m": outlet,
+                    "hull": room.get("hull"),
+                    "eee_src": room.get("eee_src", "default"),
                 })
                 st.markdown(f'<div style="height:8px;"></div>', unsafe_allow_html=True)
             updated_zones = []
@@ -285,6 +292,11 @@ def _render_params_editor(bdata):
                 "floor_name": floor.get("floor_name", f"Floor {ti+1}"),
                 "rooms": updated_rooms,
                 "fire_zones": updated_zones,
+                "structure": floor.get("structure"),
+                "structural_elements": floor.get("structural_elements", []),
+                "plan_elements": floor.get("plan_elements", []),
+                "pipes": floor.get("pipes", []),
+                "electrical_equipment": floor.get("electrical_equipment", []),
             })
     if st.button(T["save_btn"], width="stretch"):
         st.session_state.building_data = {
@@ -485,6 +497,12 @@ if st.session_state.review_loading:
     st.session_state.eee_results = results["eee_results"]
     st.session_state.building_results = results["building_results"]
     st.session_state.structural_results = results["structural_results"]
+    st.session_state.mep_results = results["mep_results"]
+    st.session_state.accessibility_results = results.get("accessibility_results", [])
+    st.session_state.coverage_findings = results.get("coverage_findings", [])
+    st.session_state.discipline_checked = results.get("discipline_checked", {})
+    st.session_state.discipline_notes = results.get("discipline_notes", {})
+    st.session_state.clash_candidates = results.get("clash_candidates", [])
     st.session_state.conflicts = results["conflicts"]
     st.session_state.all_issues = results["all_issues"]
     st.session_state.ai_report = None
@@ -542,18 +560,10 @@ elif st.session_state.page == "upload":
 
     f1, f2, f3, f4 = st.columns(4)
     features = [
-        ("🏗️", C["blue"], T["feat1_t"],
-         f"IFC → 楼层/房间/构件\n模型健康度 QA\n门宽/疏散距离/截面" if LANG == "en" else
-         f"IFC → 楼层/房间/构件\n模型健康度 QA\n门宽/疏散距离/截面"),
-        ("⚖️", C["orange"], T["feat2_t"],
-         f"消防/电气/结构/无障碍\n值 vs 阈值 · 动态阈值\n跨楼层聚合 · 冲突" if LANG == "en" else
-         f"消防/电气/结构/无障碍\n值 vs 阈值 · 动态阈值\n跨楼层聚合 · 冲突"),
-        ("🔍", C["red"], T["feat3_t"],
-         f"RAG 检索规范原文复核\n已复核 ✅ / 待人工复核 ⚠️\n证据片段展示" if LANG == "en" else
-         f"RAG 检索规范原文复核\n已复核 ✅ / 待人工复核 ⚠️\n证据片段展示"),
-        ("🌐", C["purple"], T["feat4_t"],
-         f"CN GB ↔ SG FC23 一键切换\n规则库配置化扩展\n双语界面" if LANG == "en" else
-         f"CN GB ↔ SG FC23 一键切换\n规则库配置化扩展\n双语界面"),
+        ("🏗️", C["blue"], T["feat1_t"], T["feat1_d"]),
+        ("⚖️", C["orange"], T["feat2_t"], T["feat2_d"]),
+        ("🔍", C["red"], T["feat3_t"], T["feat3_d"]),
+        ("🌐", C["purple"], T["feat4_t"], T["feat4_d"]),
     ]
     for col, (icon, color, title, desc) in zip([f1, f2, f3, f4], features):
         with col:
@@ -590,7 +600,8 @@ elif st.session_state.page == "upload":
                     hm1.metric(T["qa_score"], f"{qa.get('score', 0)}/100")
                     hm2.progress(max(0, min(100, qa.get('score', 0))) / 100)
                     for ch in qa.get("checks", []):
-                        lvl = ch["level"]; msg = ch["message"]
+                        lvl = ch["level"]
+                        msg = ch["message_en"] if LANG == "en" and ch.get("message_en") else ch["message"]
                         if lvl == "error":
                             st.error(msg)
                         elif lvl == "warn":
@@ -610,30 +621,29 @@ elif st.session_state.page == "upload":
                 first_rooms = bdata["floors"][0]["rooms"] if bdata.get("floors") else []
                 if first_rooms:
                     st.session_state.uploaded_image, _ = render_room_plan(
-                        first_rooms, bdata["floors"][0]["floor_name"])
+                        first_rooms, bdata["floors"][0]["floor_name"],
+                        bdata["floors"][0].get("plan_elements"))
                 else:
                     st.session_state.uploaded_image = generate_sample_image(struct.get("file_name", "BIM"), variant=0)
                 st.session_state.civil_results = []
                 st.session_state.eee_results = []
                 st.session_state.building_results = []
                 st.session_state.structural_results = []
+                st.session_state.mep_results = []
                 st.session_state.conflicts = []
                 st.session_state.all_issues = []
                 total_doors = sum(f["structure"]["doors"] for f in struct["floors"])
                 st.success(
                     f'{T["ifc_parsed"]} {struct["storey_count"]} {T["ifc_storey_lbl"]} · '
                     f'{T["ifc_footprint_lbl"]} {struct["building_footprint_area_sqm"]} m² · '
-                    f'房间 {struct["total_rooms"]} · 门 {total_doors} 扇')
+                    f'{T["ifc_rooms_lbl"]} {struct["total_rooms"]} · '
+                    f'{T["ifc_doors_lbl"]} {total_doors}')
                 for f in struct["floors"]:
                     s = f["structure"]
-                    if LANG == "zh":
-                        line = (f'<b>{f["name"]}</b> — 占地 {f["footprint_area_sqm"]}m² · '
-                                f'房间 {len(f["rooms"])} · 墙 {s["walls"]} · 门 {s["doors"]} · '
-                                f'窗 {s["windows"]} · 门宽 {s["door_widths_m"]}m')
-                    else:
-                        line = (f'<b>{f["name"]}</b> — footprint {f["footprint_area_sqm"]}m² · '
-                                f'rooms {len(f["rooms"])} · walls {s["walls"]} · doors {s["doors"]} · '
-                                f'windows {s["windows"]} · door widths {s["door_widths_m"]}m')
+                    line = (f'<b>{_floor_label(f["name"])}</b> — {T["ifc_footprint_lbl"]} {f["footprint_area_sqm"]}m² · '
+                            f'{T["ifc_rooms_lbl"]} {len(f["rooms"])} · {T["ifc_walls_lbl"]} {s["walls"]} · '
+                            f'{T["ifc_doors_lbl"]} {s["doors"]} · {T["ifc_windows_lbl"]} {s["windows"]} · '
+                            f'{T["ifc_door_w_lbl"]} {s["door_widths_m"]}m')
                     st.markdown(f'<div style="font-size:13px;color:{C["muted"]};padding:2px 0;">{line}</div>',
                                 unsafe_allow_html=True)
 
@@ -668,7 +678,9 @@ elif st.session_state.page == "upload":
         with p2:
             _fnn = [_floor_label(f.get("floor_name", f"F{i}")) for i, f in enumerate(_bdata["floors"])]
             _fli = st.radio(T["floor_sel"], options=range(len(_fnn)), format_func=lambda i: _fnn[i], index=0, horizontal=True, label_visibility="collapsed", key="up_floor")
-            _plan, _rmap = render_room_plan(_bdata["floors"][_fli].get("rooms", []), _bdata["floors"][_fli].get("floor_name", ""))
+            _plan, _rmap = render_room_plan(_bdata["floors"][_fli].get("rooms", []),
+                                           _bdata["floors"][_fli].get("floor_name", ""),
+                                           _bdata["floors"][_fli].get("plan_elements"))
             with st.container(border=True):
                 st.image(_plan, width="stretch")
         st.markdown(f'<div style="font-weight:700;font-size:16px;color:{C["text"]};margin:16px 0 6px;">{T["section_t"]}</div>', unsafe_allow_html=True)
@@ -697,6 +709,8 @@ elif st.session_state.page == "results":
     eee_r = st.session_state.get("eee_results", [])
     building_r = st.session_state.get("building_results", [])
     structural_r = st.session_state.get("structural_results", [])
+    mep_r = st.session_state.get("mep_results", [])
+    acc_r = st.session_state.get("accessibility_results", [])
     conflicts = st.session_state.get("conflicts", [])
     all_issues = st.session_state.get("all_issues", [])
     bdata = st.session_state.get("building_data") or DEMO_DATA
@@ -736,7 +750,7 @@ elif st.session_state.page == "results":
 
         if rooms:
             # data-driven plan — real rooms packed by area, markers on room centroids
-            base_img, room_map = render_room_plan(rooms, fname)
+            base_img, room_map = render_room_plan(rooms, fname, floor.get("plan_elements"))
             annotated_by_floor[fname] = annotate_room_plan(base_img, floor_issues, room_map)
             correction_by_floor[fname] = generate_correction_image(
                 base_img, floor_civ, floor_eee, conflicts, bdata, fname,
@@ -775,7 +789,8 @@ elif st.session_state.page == "results":
         _q1.metric(T["qa_score"], f"{_qa.get('score', 0)}/100")
         _q2.progress(max(0, min(100, _qa.get('score', 0))) / 100)
         for _ch in _qa.get("checks", []):
-            _lv = _ch["level"]; _msg = _ch["message"]
+            _lv = _ch["level"]
+            _msg = _ch["message_en"] if LANG == "en" and _ch.get("message_en") else _ch["message"]
             if _lv == "error":
                 st.error(_msg)
             elif _lv == "warn":
@@ -788,7 +803,7 @@ elif st.session_state.page == "results":
 
     high = sum(1 for i in all_issues if i.get("severity") == "High")
 
-    _n_disc = sum(1 for r in (civil_r, eee_r, building_r, structural_r) if r)
+    _n_disc = sum(1 for r in (civil_r, eee_r, building_r, structural_r, mep_r) if r)
 
     s1, s2, s3, s4 = st.columns(4)
     with s1:
@@ -799,6 +814,87 @@ elif st.session_state.page == "results":
         st.markdown(f'<div class="aicher-stat red"><div class="value">{len(conflicts)}</div><div class="label">{T["s_conf"]}</div></div>', unsafe_allow_html=True)
     with s4:
         st.markdown(f'<div class="aicher-stat purple"><div class="value">{_n_disc}</div><div class="label">{T["s_disc"]}</div></div>', unsafe_allow_html=True)
+
+    # Honest per-discipline check status: 0 findings could mean "checked, clean"
+    # or "not checked (no elements to judge)" — make the difference visible.
+    _chk = st.session_state.get("discipline_checked", {})
+    _notes = st.session_state.get("discipline_notes", {})
+    _discs = [("civil", civil_r, T["disc_civil"]), ("eee", eee_r, T["disc_eee"]),
+              ("structural", structural_r, T["disc_str"]), ("mep", mep_r, T["disc_mep"]),
+              ("building", building_r, T["disc_bld"])]
+    _cells = []
+    for _k, _r, _lbl in _discs:
+        _n = len(_r)
+        _c = _chk.get(_k, 0)
+        if _n > 0:
+            _st = f'<b style="color:{C["orange"]};">{T["disc_n_found"].format(n=_n)}</b>'
+        elif _c > 0:
+            _st = T["disc_clean"]
+        elif _k == "structural" and _notes.get("structural_unit_suspicious", 0) > 0:
+            _st = T["disc_unit_susp"].format(n=_notes["structural_unit_suspicious"])
+        else:
+            _st = T["disc_unchecked"]
+        _cells.append(f'<span>{_lbl}: {_st}</span>')
+    st.markdown(f'<div style="font-size:13px;color:{C["muted"]};margin:10px 0 4px;">'
+                f'{T["s_disc_check"]}：{"　".join(_cells)}</div>', unsafe_allow_html=True)
+
+    # Structural quantities by material (台阶3 · 工程量)
+    _has_qty = any((f.get("structure") or {}).get("qty_by_type") for f in bdata.get("floors", []))
+    if _has_qty:
+        with st.expander(f"🏗️ {T['qty_title']}", expanded=False):
+            _vol_total = 0.0
+            for _f in bdata.get("floors", []):
+                _st = _f.get("structure") or {}
+                _qt = _st.get("qty_by_type") or {}
+                _mv = _st.get("material_volumes") or {}
+                if not _qt:
+                    continue
+                _by_type = "　·　".join(
+                    f'{_t} {v["count"]}{T["qty_pcs"]}/{v["volume_m3"]}m³' for _t, v in _qt.items())
+                _by_mat = "　·　".join(
+                    f'{T["mat_unknown"] if k == "unknown" else k}: {v} m³' for k, v in _mv.items()) or "—"
+                _vol_total += _st.get("structural_volume_m3", 0) or 0
+                st.markdown(f'<div style="font-size:13px;color:{C["muted"]};margin:6px 0;">'
+                            f'<b>{_floor_label(_f.get("floor_name", _f.get("floor_id", "")))}</b> '
+                            f'（{T["qty_vol"]} {_st.get("structural_volume_m3", 0)} m³）<br>'
+                            f'　{T["qty_by_type"]}：{_by_type}<br>　{T["qty_by_mat"]}：{_by_mat}</div>',
+                            unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:13px;font-weight:600;color:{C["text"]};margin-top:6px;">'
+                        f'{T["qty_total"]}：{round(_vol_total, 1)} m³</div>', unsafe_allow_html=True)
+
+    # Coarse MEP-vs-structure clash candidates (bbox pre-check, 台阶③)
+    _clashes = st.session_state.get("clash_candidates", [])
+    if _clashes:
+        with st.expander(f"🧱 {T['clash_title']}（{len(_clashes)}）", expanded=False):
+            st.markdown(f'<div style="font-size:12px;color:{C["muted"]};margin-bottom:6px;">{T["clash_h"]}</div>',
+                        unsafe_allow_html=True)
+            for _c in _clashes:
+                _fl = _floor_label(_c.get("floor_name", ""))
+                _mark = T["clash_confirmed"] if _c.get("confirmed") else T["clash_candidate"]
+                _col = C["red"] if _c.get("confirmed") else C["muted"]
+                st.markdown(f'<div style="font-size:13px;color:{_col};margin:3px 0;">'
+                            f'{_mark} <b>{_c["mep"]}</b> {T["clash_penetrates"]} <b>{_c["vs"]}</b>'
+                            f'（{_c["type"]} · {T["clash_depth"]} {_c["depth"]}m · {_fl}）</div>',
+                            unsafe_allow_html=True)
+
+    # Rules that exist but could not run because the model lacks their field
+    _cov = st.session_state.get("coverage_findings", [])
+    if _cov:
+        with st.expander(f"📋 {T['coverage_title']}（{len(_cov)}）", expanded=False):
+            st.markdown(f'<div style="font-size:12px;color:{C["muted"]};margin-bottom:8px;">{T["coverage_hint"]}</div>',
+                        unsafe_allow_html=True)
+            _cov_tl = {"civil": T["disc_civil"], "eee": T["disc_eee"], "building": T["disc_bld"],
+                       "structural": T["disc_str"], "mep": T["disc_mep"], "accessibility": T["disc_acc"]}
+            for _c in _cov:
+                _d = _cov_tl.get(_c.get("type", ""), _c.get("type", ""))
+                st.markdown(
+                    f'<div style="font-size:12.5px;color:{C["muted"]};padding:3px 0;border-bottom:1px dashed #eee;">'
+                    f'<span style="color:{C["text"]};font-weight:600;">{_c["title"]}</span>'
+                    f' <span class="tag tag-disc-civil">{_d}</span>'
+                    f' <span style="font-family:monospace;font-size:11px;color:{C["silver"]};">{_c.get("code_ref","")}</span><br>'
+                    f'{_c["description"]}</div>',
+                    unsafe_allow_html=True,
+                )
 
     # Standard-switching diff summary
     if added_in_other or removed_in_other:
@@ -863,7 +959,7 @@ elif st.session_state.page == "results":
                     f'<span style="color:{C["silver"]};font-family:monospace;font-size:11px;">{iss.get("code_ref","")}</span></div>',
                     unsafe_allow_html=True)
         else:
-            ok_msg = "所有全楼累积指标均符合规范要求。" if LANG == "zh" else "All building-level aggregates meet code requirements."
+            ok_msg = T["bld_all_ok"]
             st.markdown(
                 f'<div style="font-size:16px;font-weight:700;color:{C["green"]};margin-bottom:8px;">'
                 f'✓ {T["s_bld"]}</div>', unsafe_allow_html=True)
@@ -887,11 +983,13 @@ elif st.session_state.page == "results":
             loc_label = T["loc"]
             ref_label = T["ref"]
             _tl = {"civil": T["disc_civil"], "eee": T["disc_eee"], "building": T["disc_bld"],
-                   "structural": T["disc_str"], "conflict": T["disc_conf"]}
+                   "structural": T["disc_str"], "mep": T["disc_mep"], "accessibility": T["disc_acc"],
+                   "conflict": T["disc_conf"]}
             _itype = iss.get("type", "")
             _sev_cls = {"High": "high", "Medium": "medium", "Low": "low", "Missing": "missing"}.get(sev, "low")
             _disc_cls = {"civil": "civil", "eee": "eee", "building": "building",
-                         "structural": "structural", "conflict": "conflict"}.get(_itype, "low")
+                         "structural": "structural", "mep": "mep", "accessibility": "accessibility",
+                         "conflict": "conflict"}.get(_itype, "low")
             evid = ""
             if iss.get("review_status") == "verified" and iss.get("review_evidence"):
                 evid = (f'<div class="card-meta" style="color:{C["green"]};">'
@@ -908,11 +1006,12 @@ elif st.session_state.page == "results":
 
     # ② Compliance Judge — unified findings (left) + floor plan (right)
     _fopt = {T["disc_civil"]: "civil", T["disc_eee"]: "eee", T["disc_bld"]: "building",
-             T["disc_str"]: "structural", T["disc_conf"]: "conflict"}
+             T["disc_str"]: "structural", T["disc_mep"]: "mep", T["disc_acc"]: "accessibility",
+             T["disc_conf"]: "conflict"}
     _flt = st.radio(
         "filter", options=[T["filter_all"]] + list(_fopt.keys()),
         horizontal=True, label_visibility="collapsed", key="find_flt")
-    _findings = civil_r + eee_r + building_r + structural_r
+    _findings = civil_r + eee_r + building_r + structural_r + mep_r + acc_r
     if _flt != T["filter_all"]:
         _fid = _fopt[_flt]
         _findings = [i for i in _findings if i.get("type") == _fid]
@@ -1008,11 +1107,11 @@ elif st.session_state.page == "results":
             correction_by_floor[first_floor].save(buf_c, format="PNG")
             st.download_button(T["dl_correction"], data=buf_c.getvalue(), file_name=f"correction_{first_floor}.png", mime="image/png", width="stretch")
     with dc3:
-        report_html = generate_report(annotated_by_floor, all_issues, civil_r, eee_r, building_r, structural_r, conflicts, STD_META)
+        report_html = generate_report(annotated_by_floor, all_issues, civil_r, eee_r, building_r, structural_r, mep_r, conflicts, STD_META)
         st.download_button(T["dl_report"], data=report_html, file_name="archcheck_report.html", mime="text/html", width="stretch")
         import openpyxl
         _tlm = {"civil": T["disc_civil"], "eee": T["disc_eee"], "building": T["disc_bld"],
-                "structural": T["disc_str"], "conflict": T["disc_conf"]}
+                "structural": T["disc_str"], "mep": T["disc_mep"], "conflict": T["disc_conf"]}
         _wb = openpyxl.Workbook()
         _ws = _wb.active
         _ws.title = "Review"
@@ -1036,6 +1135,7 @@ elif st.session_state.page == "results":
             st.session_state.eee_results = []
             st.session_state.building_results = []
             st.session_state.structural_results = []
+            st.session_state.mep_results = []
             st.session_state.conflicts = []
             st.session_state.all_issues = []
             st.rerun()
@@ -1061,13 +1161,21 @@ elif st.session_state.page == "kb":
                 _bcol = C["green"] if _acc == "free" else C["orange"]
                 _fn = _doc.get("file", "")
                 _full = _kb_root / _ck / _sk / _fn if _fn else None
-                _title = _doc.get("name_zh") or _doc.get("name", "")
-                _std = _doc.get("standard_no", "")
+                if LANG == "en":
+                    _title = _doc.get("name_en") or _doc.get("name", "")
+                    _std = _doc.get("standard_no_en") or _doc.get("standard_no", "")
+                    _auth = _doc.get("authority_en") or _doc.get("authority")
+                    _notes = _doc.get("notes_en") or _doc.get("notes")
+                else:
+                    _title = _doc.get("name_zh") or _doc.get("name", "")
+                    _std = _doc.get("standard_no", "")
+                    _auth = _doc.get("authority")
+                    _notes = _doc.get("notes")
                 with st.expander(f"{_title} — {_std}"):
                     st.markdown(f'<span style="font-size:12px;color:{_bcol};font-weight:600;padding:2px 8px;border-radius:2px;background:{_bcol}18;">{_badge}</span>', unsafe_allow_html=True)
-                    for _k, _v in (("Authority", _doc.get("authority")), ("Year", _doc.get("year")),
+                    for _k, _v in (("Authority", _auth), ("Year", _doc.get("year")),
                                    ("Status", _doc.get("status")), ("Scope", _doc.get("scope")),
-                                   ("Source", _doc.get("source")), ("Notes", _doc.get("notes"))):
+                                   ("Source", _doc.get("source")), ("Notes", _notes)):
                         if _v:
                             st.caption(f"**{_k}:** {_v}")
                     if _full and _full.exists():

@@ -57,5 +57,52 @@
         "severity": "Medium",
         "code_ref": "GB 50763",
         "message": "坡道坡度 {value} 超过 1:12（0.083）无障碍最大限值，需重新设计坡道或增设电梯。"
+    },
+    {
+        "id": "BLD-006",
+        "name": "消防电梯检查",
+        "description": "建筑高度超过 33m 的住宅或超过 32m 的公共建筑应设消防电梯（待提取 fire_elevator_count 字段）",
+        "field": "fire_elevator_count",
+        "operator": ">=",
+        "threshold": 1,
+        "condition_field": "total_floors",
+        "condition_operator": ">",
+        "condition_threshold": 11,
+        "severity": "High",
+        "code_ref": "GB 50016",
+        "message": "地上层数超过 11 层，未设置消防电梯（当前 {value} 部）。"
+    },
+    {
+        "id": "BLD-007",
+        "name": "灭火器配置检查",
+        "description": "建筑应按灭火器配置规范配备灭火器（待提取 fire_extinguisher_count 字段）",
+        "field": "fire_extinguisher_count",
+        "operator": ">=",
+        "threshold": 1,
+        "severity": "Medium",
+        "code_ref": "GB 50140",
+        "message": "建筑未配置灭火器，应按 GB 50140 配置。"
+    },
+    {
+        "id": "BLD-008",
+        "name": "自动喷水灭火系统检查",
+        "description": "达到规模要求的建筑应设自动喷水灭火系统（待提取 has_sprinkler_system 字段）",
+        "field": "has_sprinkler_system",
+        "operator": "==",
+        "threshold": true,
+        "severity": "High",
+        "code_ref": "GB 50016",
+        "message": "建筑未设置自动喷水灭火系统，应评估是否需增设。"
+    },
+    {
+        "id": "BLD-009",
+        "name": "火灾自动报警系统检查",
+        "description": "达到规模要求的建筑应设火灾自动报警系统（待提取 has_fire_alarm 字段）",
+        "field": "has_fire_alarm",
+        "operator": "==",
+        "threshold": true,
+        "severity": "High",
+        "code_ref": "GB 50016",
+        "message": "建筑未设置火灾自动报警系统，应评估是否需增设。"
     }
 ]

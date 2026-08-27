@@ -49,5 +49,20 @@
         "severity": "Low",
         "code_ref": "SS EN 1992",
         "message": "Slab thickness {value}m below required {threshold}m. Increase slab thickness."
+    },
+    {
+        "id": "STR-004",
+        "name": "Beam Minimum Width Check",
+        "description": "Reinforced-concrete beam section width must not fall below the 200mm constructional minimum",
+        "field": "width_m",
+        "operator": ">=",
+        "threshold": 0.2,
+        "unit": "m",
+        "condition_field": "element_type",
+        "condition_operator": "==",
+        "condition_threshold": "beam",
+        "severity": "Low",
+        "code_ref": "SS EN 1992",
+        "message": "Beam width {value}m below constructional minimum {threshold}m. Increase beam width."
     }
 ]

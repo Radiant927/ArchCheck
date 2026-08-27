@@ -2,16 +2,16 @@
     {
         "id": "EEE-001",
         "name": "Emergency Lighting Check",
-        "description": "Corridors, stairwells, and vestibules must have emergency lighting",
-        "field": "has_emergency_light",
+        "description": "Lighting in corridors/stairwells/vestibules must be emergency type",
+        "field": "has_emergency",
         "operator": "==",
         "threshold": true,
-        "condition_field": "type",
-        "condition_operator": "in",
-        "condition_threshold": ["Corridor", "Stairwell", "Vestibule"],
+        "condition_field": "equipment_type",
+        "condition_operator": "==",
+        "condition_threshold": "lighting",
         "severity": "High",
         "code_ref": "SS 563",
-        "message": "{room_name} (type: {condition_value}) lacks emergency lighting. Install self-contained luminaire."
+        "message": "{room_name} lacks emergency lighting. Install self-contained luminaire."
     },
     {
         "id": "EEE-002",
@@ -21,9 +21,12 @@
         "operator": ">=",
         "threshold": 1.5,
         "unit": "m",
+        "condition_field": "equipment_type",
+        "condition_operator": "==",
+        "condition_threshold": "distribution",
         "severity": "Medium",
         "code_ref": "SS 638",
-        "message": "Panel is only {value}m from water source, {threshold}m minimum required. Relocate panel or provide IP-rated enclosure."
+        "message": "Panel {room_name} is only {value}m from water source, {threshold}m minimum required. Relocate panel or provide IP-rated enclosure."
     },
     {
         "id": "EEE-003",
@@ -33,9 +36,12 @@
         "operator": "<=",
         "threshold": 32,
         "unit": "A",
+        "condition_field": "equipment_type",
+        "condition_operator": "==",
+        "condition_threshold": "distribution",
         "severity": "Medium",
         "code_ref": "SS 638",
-        "message": "Circuit load {value}A exceeds limit {threshold}A (ring circuit rating). Split circuit or use radial circuit."
+        "message": "Panel {room_name} circuit load {value}A exceeds limit {threshold}A (ring circuit rating). Split circuit or use radial circuit."
     },
     {
         "id": "EEE-004",
@@ -45,8 +51,54 @@
         "operator": "<=",
         "threshold": 10,
         "unit": "m",
+        "condition_field": "equipment_type",
+        "condition_operator": "==",
+        "condition_threshold": "socket",
         "severity": "Low",
         "code_ref": "SS 531 (advisory)",
-        "message": "Outlet spacing {value}m exceeds advisory guideline {threshold}m. Additional outlets recommended based on point-of-use assessment."
+        "message": "Outlet {room_name} spacing {value}m exceeds advisory guideline {threshold}m. Additional outlets recommended based on point-of-use assessment."
+    },
+    {
+        "id": "EEE-007",
+        "name": "Exit Sign Check (equipment)",
+        "description": "Luminaires shall include exit-sign functionality (awaits has_exit_sign field)",
+        "field": "has_exit_sign",
+        "operator": "==",
+        "threshold": true,
+        "severity": "Medium",
+        "condition_field": "equipment_type",
+        "condition_operator": "==",
+        "condition_threshold": "lighting",
+        "code_ref": "SS 563",
+        "message": "{room_name} luminaire lacks exit-sign functionality."
+    },
+    {
+        "id": "EEE-008",
+        "name": "Emergency Lighting Minimum Illuminance",
+        "description": "Minimum illuminance on escape routes shall not be below 1 lx (awaits illuminance_lx field)",
+        "field": "illuminance_lx",
+        "operator": ">=",
+        "threshold": 1,
+        "unit": "lx",
+        "severity": "Medium",
+        "condition_field": "equipment_type",
+        "condition_operator": "==",
+        "condition_threshold": "lighting",
+        "code_ref": "SS 563",
+        "message": "{room_name} emergency lighting {value}lx is below {threshold}lx."
+    },
+    {
+        "id": "EEE-009",
+        "name": "Fire Panel Fire-Rating Check",
+        "description": "Fire-fighting electrical panels shall be fire-rated (awaits fire_rated field)",
+        "field": "fire_rated",
+        "operator": "==",
+        "threshold": true,
+        "severity": "Medium",
+        "condition_field": "equipment_type",
+        "condition_operator": "==",
+        "condition_threshold": "distribution",
+        "code_ref": "SS 638",
+        "message": "Panel {room_name} has no fire-rating indication; fire-fighting circuits require a fire-rated panel."
     }
 ]

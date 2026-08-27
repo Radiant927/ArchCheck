@@ -57,5 +57,52 @@
         "severity": "Medium",
         "code_ref": "BCA Code on Accessibility 2025",
         "message": "Ramp slope {value} exceeds the 1:12 (0.083) maximum for accessible routes. Redesign the ramp or provide a lift."
+    },
+    {
+        "id": "BLD-006",
+        "name": "Fire Lift Check",
+        "description": "Buildings with habitable height over the Fire Code threshold shall have a fire lift (awaits fire_elevator_count field)",
+        "field": "fire_elevator_count",
+        "operator": ">=",
+        "threshold": 1,
+        "condition_field": "total_floors",
+        "condition_operator": ">",
+        "condition_threshold": 11,
+        "severity": "High",
+        "code_ref": "FC23",
+        "message": "Building over 11 storeys has no fire lift (currently {value})."
+    },
+    {
+        "id": "BLD-007",
+        "name": "Fire Extinguisher Check",
+        "description": "Building shall be provided with fire extinguishers per Fire Code (awaits fire_extinguisher_count field)",
+        "field": "fire_extinguisher_count",
+        "operator": ">=",
+        "threshold": 1,
+        "severity": "Medium",
+        "code_ref": "FC23",
+        "message": "Building has no fire extinguisher provision; provide per Fire Code."
+    },
+    {
+        "id": "BLD-008",
+        "name": "Sprinkler System Check",
+        "description": "Buildings reaching the Fire Code scale threshold shall be sprinkler-protected (awaits has_sprinkler_system field)",
+        "field": "has_sprinkler_system",
+        "operator": "==",
+        "threshold": true,
+        "severity": "High",
+        "code_ref": "FC23",
+        "message": "Building has no sprinkler system; assess whether it is required."
+    },
+    {
+        "id": "BLD-009",
+        "name": "Fire Alarm System Check",
+        "description": "Buildings reaching the Fire Code scale threshold shall have a fire alarm system (awaits has_fire_alarm field)",
+        "field": "has_fire_alarm",
+        "operator": "==",
+        "threshold": true,
+        "severity": "High",
+        "code_ref": "FC23",
+        "message": "Building has no fire alarm system; assess whether it is required."
     }
 ]

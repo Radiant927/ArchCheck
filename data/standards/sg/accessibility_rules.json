@@ -1,0 +1,64 @@
+[
+  {
+    "id": "ACC-001",
+    "name": "Accessible Toilet Check",
+    "description": "Public buildings shall provide an accessible toilet (awaits accessible_toilet_count field)",
+    "scope": "building",
+    "field": "accessible_toilet_count",
+    "operator": ">=",
+    "threshold": 1,
+    "severity": "Medium",
+    "code_ref": "CoA 2025",
+    "message": "Building has no accessible toilet; at least 1 is required."
+  },
+  {
+    "id": "ACC-002",
+    "name": "Accessible Parking Check",
+    "description": "Public buildings shall provide accessible parking lots (awaits accessible_parking_count field)",
+    "scope": "building",
+    "field": "accessible_parking_count",
+    "operator": ">=",
+    "threshold": 1,
+    "severity": "Medium",
+    "code_ref": "CoA 2025",
+    "message": "Building has no accessible parking lot; at least 1 is required."
+  },
+  {
+    "id": "ACC-003",
+    "name": "Accessible Corridor Width Check",
+    "description": "Accessible circulation corridor clear width shall not be less than 1.2m (awaits accessible_corridor_width_m field)",
+    "scope": "room",
+    "field": "accessible_corridor_width_m",
+    "operator": ">=",
+    "threshold": 1.2,
+    "unit": "m",
+    "severity": "Medium",
+    "code_ref": "CoA 2025",
+    "message": "{room_name} accessible circulation width below {threshold}m."
+  },
+  {
+    "id": "ACC-004",
+    "name": "Accessible Lift Check",
+    "description": "Multi-storey public buildings shall provide an accessible lift (awaits accessible_elevator_count field)",
+    "scope": "building",
+    "field": "accessible_elevator_count",
+    "operator": ">=",
+    "threshold": 1,
+    "severity": "Medium",
+    "code_ref": "CoA 2025",
+    "message": "Building has no accessible lift; at least 1 is required."
+  },
+  {
+    "id": "ACC-005",
+    "name": "Accessible Ramp Width Check",
+    "description": "Accessible ramp clear width shall not be less than 1.0m (awaits accessible_ramp_width_m field)",
+    "scope": "building",
+    "field": "accessible_ramp_width_m",
+    "operator": ">=",
+    "threshold": 1.0,
+    "unit": "m",
+    "severity": "Medium",
+    "code_ref": "CoA 2025",
+    "message": "Accessible ramp clear width below {threshold}m."
+  }
+]

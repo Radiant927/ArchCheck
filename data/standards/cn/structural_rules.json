@@ -49,5 +49,20 @@
         "severity": "Low",
         "code_ref": "GB 50010",
         "message": "楼板厚度 {value}m 小于要求 {threshold}m，需增加板厚。"
+    },
+    {
+        "id": "STR-004",
+        "name": "梁截面最小宽度检查",
+        "description": "钢筋混凝土梁截面宽度不应小于构造要求 200mm",
+        "field": "width_m",
+        "operator": ">=",
+        "threshold": 0.2,
+        "unit": "m",
+        "condition_field": "element_type",
+        "condition_operator": "==",
+        "condition_threshold": "beam",
+        "severity": "Low",
+        "code_ref": "GB 50010",
+        "message": "梁截面宽度 {value}m 小于构造要求 {threshold}m，需加大梁宽。"
     }
 ]
