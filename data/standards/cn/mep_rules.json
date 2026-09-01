@@ -120,13 +120,16 @@
   {
     "id": "MEP-009",
     "name": "室内消火栓间距检查",
-    "description": "室内消火栓布置间距不应超过 30m（待提取 hydrant_spacing_m 字段）",
+    "description": "室内消火栓布置间距不应超过 30m（由消防管 bbox 中心近似，需复核）",
     "scope": "pipe",
     "field": "hydrant_spacing_m",
     "operator": "<=",
     "threshold": 30,
     "unit": "m",
     "severity": "High",
+    "condition_field": "pipe_type",
+    "condition_operator": "==",
+    "condition_threshold": "fire",
     "code_ref": "GB 50974",
     "message": "室内消火栓间距 {value}m 超过限值 {threshold}m，需加密布置。"
   },

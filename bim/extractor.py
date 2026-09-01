@@ -9,6 +9,7 @@ architectural IFCs, so those are defaulted and left for the app's parameter edit
 Units: the model's length unit is read from the IFC (many exports use mm, others
 use m) and every conversion is scaled accordingly.
 """
+import math
 import re
 from pathlib import Path
 
@@ -236,6 +237,11 @@ def _pipe_data(e, scale, settings):
         slope = round(float(slope), 3)
     out = {"name": e.Name or e.GlobalId, "pipe_type": pipe_type,
            "diameter_m": diameter, "slope": slope, "length_m": length}
+    # fire hydrant spacing: store bbox centroid for inter-pipe distance computation
+    if pipe_type == "fire":
+        _c = _elem_bbox_centroid(e, scale, settings)
+        if _c:
+            out["_centroid"] = _c
     # drainage stack diameter: only for geometrically-vertical drainage runs
     # (z-extent dominant), so a horizontal branch isn't mistaken for a stack.
     if pipe_type == "drainage" and d and d[2] > max(d[0], d[1]) * 1.5:
@@ -522,6 +528,23 @@ def _elem_bbox_dims(elem, scale, settings):
         return ((max(xs) - min(xs)) * scale,
                 (max(ys) - min(ys)) * scale,
                 (max(zs) - min(zs)) * scale)
+    except Exception:
+        return None
+
+
+def _elem_bbox_centroid(elem, scale, settings):
+    """(cx, cy, cz) centroid in metres of an element's tessellated geometry bbox."""
+    try:
+        shape = ifcgeom.create_shape(settings, elem)
+        v = shape.geometry.verts
+        if len(v) < 6:
+            return None
+        xs = v[0::3]
+        ys = v[1::3]
+        zs = v[2::3]
+        return ((min(xs) + max(xs)) / 2 * scale,
+                (min(ys) + max(ys)) / 2 * scale,
+                (min(zs) + max(zs)) / 2 * scale)
     except Exception:
         return None
 
@@ -1262,6 +1285,19 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         clashes = _detect_clashes(els, geom_settings) if extract_plan else []
         pipe_elems = [e for e in els if e.is_a("IfcFlowSegment") and not e.is_a("IfcDuctSegment")]
         pipes = [_pipe_data(e, scale, geom_settings) for e in pipe_elems]
+        # fire hydrant spacing: distance to nearest other fire pipe centroid
+        fire_centroids = [(i, p["_centroid"]) for i, p in enumerate(pipes)
+                          if p.get("_centroid")]
+        if fire_centroids:
+            for i, (cx, cy, cz) in fire_centroids:
+                dists = sorted(math.hypot(cx - fx, cy - fy, cz - fz)
+                               for j, (fx, fy, fz) in fire_centroids if j != i)
+                if dists:
+                    pipes[i]["hydrant_spacing_m"] = round(dists[0], 3)
+                else:
+                    pipes[i]["hydrant_spacing_m"] = pipes[i].get("length_m") or 0.0
+        for p in pipes:
+            p.pop("_centroid", None)
         ducts = [_duct_data(e, scale, geom_settings) for e in els if e.is_a("IfcDuctSegment")]
         equip = [q for q in (_equip_centroid(e, geom_settings) for e in els
                              if e.is_a("IfcElectricAppliance") or e.is_a("IfcLightFixture")) if q]

@@ -120,13 +120,16 @@
   {
     "id": "MEP-009",
     "name": "Fire hydrant spacing",
-    "description": "Internal fire hydrant spacing shall not exceed 30m (awaits hydrant_spacing_m field)",
+    "description": "Internal fire hydrant spacing shall not exceed 30m (approximated from fire pipe bbox centroids; verify)",
     "scope": "pipe",
     "field": "hydrant_spacing_m",
     "operator": "<=",
     "threshold": 30,
     "unit": "m",
     "severity": "High",
+    "condition_field": "pipe_type",
+    "condition_operator": "==",
+    "condition_threshold": "fire",
     "code_ref": "Fire Code 2023",
     "message": "Fire hydrant spacing {value}m exceeds {threshold}m; additional hydrants required."
   },
