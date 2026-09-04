@@ -38,6 +38,26 @@ def available():
     return IFC_AVAILABLE
 
 
+def _by_type(m, type_name):
+    """m.by_type() that returns [] when the entity doesn't exist in the file's
+    schema (e.g. IfcPipeSegment / IfcDuctSegment are IFC4-only; IFC2X3 models
+    carry them as generic IfcFlowSegment)."""
+    try:
+        return m.by_type(type_name)
+    except Exception:
+        return []
+
+
+def _declared_length_scale(m):
+    """Meters per unit declared by the model's length unit (0.001 mm / 1.0 m),
+    or None if the model declares no length unit."""
+    for ua in m.by_type("IfcUnitAssignment"):
+        for u in ua.Units:
+            if u.is_a("IfcSIUnit") and u.UnitType == "LENGTHUNIT":
+                return _PREFIX_SCALE.get(u.Prefix, 1.0)
+    return None
+
+
 def _length_scale(m):
     """Meters per model length unit (1.0 for m, 0.001 for mm).
 
@@ -47,12 +67,7 @@ def _length_scale(m):
     is clearly metre-scale (mixed exports, e.g. Schependomlaan), use metres for
     geometry measurements (storey elevations are normalised separately).
     """
-    declared = None
-    for ua in m.by_type("IfcUnitAssignment"):
-        for u in ua.Units:
-            if u.is_a("IfcSIUnit") and u.UnitType == "LENGTHUNIT":
-                declared = _PREFIX_SCALE.get(u.Prefix, 1.0)
-                break
+    declared = _declared_length_scale(m)
     if declared is not None and declared < 1.0:
         # cross-check geometry magnitude: are sampled elements plausibly sized at
         # the declared scale, or are they metre-scale despite a mm declaration?
@@ -82,6 +97,184 @@ def _length_scale(m):
         if 0.5 <= peak <= 500:
             return 1.0  # metres
     return 0.001  # fallback: mm
+
+
+# Plausible dimension ranges (metres) for common MEP / structural element sizes.
+# Used as a sanity guard when inferring units — anything outside is treated as
+# a unit-mismatch red flag.
+_PLAUSIBLE_SIZES = {
+    "pipe_diameter": (0.01, 2.0),      # 1 cm to 2 m
+    "duct_side":     (0.05, 4.0),      # 5 cm to 4 m
+    "wall_thickness":(0.05, 1.5),      # 5 cm to 1.5 m
+    "slab_thickness":(0.08, 1.0),      # 8 cm to 1 m
+    "column_width":  (0.1, 3.0),       # 10 cm to 3 m
+}
+
+
+def _is_plausible(value_m, size_key):
+    """Whether a dimension in metres falls in a plausible real-world range."""
+    if value_m is None or value_m <= 0:
+        return False
+    lo, hi = _PLAUSIBLE_SIZES.get(size_key, (0.001, 100.0))
+    return lo <= value_m <= hi
+
+
+def _is_duct_segment(e):
+    """True if e is a duct segment. IFC4 has IfcDuctSegment; IFC2X3 carries
+    ducts as generic IfcFlowSegment, so also check name hints."""
+    if e.is_a("IfcDuctSegment"):
+        return True
+    if not e.is_a("IfcFlowSegment"):
+        return False
+    nm = (e.Name or "").lower()
+    return any(k in nm for k in ("duct", "air", "风管", "送风", "回风", "排风", "送排"))
+
+
+def _is_pipe_fitting(e):
+    """True if e is a pipe fitting. IFC4 splits IfcPipeFitting / IfcDuctFitting;
+    IFC2X3 has only generic IfcFlowFitting, so classify by name."""
+    if e.is_a("IfcPipeFitting"):
+        return True
+    if e.is_a("IfcDuctFitting"):
+        return False
+    if e.is_a("IfcFlowFitting"):
+        # IFC2X3: all flow fittings are pipe fittings unless clearly a duct part
+        nm = (e.Name or "").lower()
+        if any(k in nm for k in ("duct", "damper", "silencer", "风管", "阀")):
+            return False
+        return True
+    return False
+
+
+def _is_pipe_segment(e):
+    """True if e is a pipe segment (as opposed to a duct)."""
+    if e.is_a("IfcDuctSegment"):
+        return False
+    if not e.is_a("IfcFlowSegment"):
+        return False
+    return True
+
+
+def _infer_profile_scale(m, world_scale, declared_scale, settings, n_samples=20):
+    """Infer the unit scale of Qto / ProfileDef data by sampling and comparing
+    against tessellated geometry bbox (which uses world_scale).
+
+    Strategy
+    --------
+    1. Sample up to ``n_samples`` pipes and ducts that have both Qto/Profile
+       data AND a tessellated geometry bbox.
+    2. For each, try converting with declared_scale and with world_scale.
+    3. Vote: which scale brings Qto/Profile closer to the bbox (within 30%)?
+    4. Only commit to a global scale if the winning side leads by a clear
+       margin (>= 2:1 ratio) AND there are enough samples (>= 5).
+    5. Otherwise return ``declared_scale`` as the conservative default and a
+       confidence flag of ``False`` so callers can fall back to per-element
+       cross-checking.
+
+    Returns
+    -------
+    (profile_scale, confidence, diagnostics_dict)
+        profile_scale : float — metres per Qto/profile-definition unit
+        confidence : bool — whether we trust the global scale
+        diagnostics : dict — what we saw (n_A, n_B, n_tie, n_samples, reason)
+    """
+    if declared_scale == world_scale:
+        return declared_scale, True, {"reason": "declared == world"}
+
+    geom_s = ifcgeom.settings()
+    geom_s.set(geom_s.USE_WORLD_COORDS, True)
+
+    def _sample(elements, qto_set, qto_prop, size_key,
+                profile_fn=None, profile_scale_arg=None):
+        """Return (n_declared_hits, n_world_hits, n_ties, n_usable)."""
+        a_hits = b_hits = ties = usable = 0
+        for e in elements[:n_samples * 3]:  # over-sample, we filter below
+            if usable >= n_samples:
+                break
+            # bbox reference (ground truth in world units)
+            d = _elem_bbox_dims(e, world_scale, geom_s)
+            if not d:
+                continue
+            bbox_ref = min(d) if size_key in ("pipe_diameter",) else sorted(d)[1]
+            if bbox_ref is None or bbox_ref <= 0:
+                continue
+            # Try Qto first
+            raw = _qto_value(e, qto_set, qto_prop)
+            source = "qto"
+            # Fall back to profile def for pipes
+            if raw is None and profile_fn:
+                raw = profile_fn(e, 1.0)  # raw units (not yet scaled)
+                source = "profile"
+            if raw is None or raw <= 0:
+                continue
+            v_decl = raw * declared_scale
+            v_world = raw * world_scale
+            # Plausibility filter — crazy values can't be right
+            p_decl = _is_plausible(v_decl, size_key)
+            p_world = _is_plausible(v_world, size_key)
+            if not p_decl and not p_world:
+                continue  # both implausible — skip
+            err_decl = abs(v_decl - bbox_ref) / bbox_ref
+            err_world = abs(v_world - bbox_ref) / bbox_ref
+            TOL = 0.3
+            if err_decl < TOL and err_world < TOL:
+                ties += 1
+            elif err_decl < TOL:
+                a_hits += 1
+            elif err_world < TOL:
+                b_hits += 1
+            else:
+                # Neither matches bbox well — element geometry might be weird.
+                # Use plausibility as a tiebreaker.
+                if p_decl and not p_world:
+                    a_hits += 1
+                elif p_world and not p_decl:
+                    b_hits += 1
+                else:
+                    continue
+            usable += 1
+        return a_hits, b_hits, ties, usable
+
+    total_a = total_b = total_ties = total_usable = 0
+
+    # Pipe samples: diameter (OuterDiameter from Qto, or Radius*2 from profile)
+    pipes = list(_by_type(m, "IfcPipeSegment"))
+    if not pipes:
+        pipes = [e for e in _by_type(m, "IfcFlowSegment")
+                 if not e.is_a("IfcDuctSegment")]
+    a, b, t, u = _sample(pipes, "Qto_PipeSegmentBaseQuantities",
+                         "OuterDiameter", "pipe_diameter",
+                         profile_fn=lambda e, s: _pipe_profile_diameter(e, s))
+    total_a += a; total_b += b; total_ties += t; total_usable += u
+
+    # Duct samples: width from Qto
+    ducts = list(_by_type(m, "IfcDuctSegment"))
+    if ducts:
+        a, b, t, u = _sample(ducts, "Qto_DuctSegmentBaseQuantities",
+                             "Width", "duct_side")
+        total_a += a; total_b += b; total_ties += t; total_usable += u
+
+    diagnostics = {
+        "n_declared_hits": total_a,
+        "n_world_hits": total_b,
+        "n_ties": total_ties,
+        "n_usable": total_usable,
+    }
+
+    if total_usable < 5:
+        diagnostics["reason"] = "too_few_samples"
+        return declared_scale, False, diagnostics
+
+    # Clear majority? need >= 2:1 ratio
+    if total_a >= total_b * 2 and total_a >= 3:
+        diagnostics["reason"] = "declared_wins_2to1"
+        return declared_scale, True, diagnostics
+    if total_b >= total_a * 2 and total_b >= 3:
+        diagnostics["reason"] = "world_wins_2to1"
+        return world_scale, True, diagnostics
+
+    diagnostics["reason"] = "ambiguous"
+    return declared_scale, False, diagnostics
 
 
 def _extrude_profile(item):
@@ -127,6 +320,84 @@ def _pset_value(e, pset_name, prop_name):
     return None
 
 
+def _any_pset_value(e, prop_name):
+    """Search all property sets on an element for a property by name."""
+    for rel in (e.IsDefinedBy or []):
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        pd = rel.RelatingPropertyDefinition
+        if pd.is_a("IfcPropertySet"):
+            for p in pd.HasProperties:
+                if p.Name == prop_name and p.NominalValue:
+                    try:
+                        return p.NominalValue.wrappedValue
+                    except Exception:
+                        pass
+    return None
+
+
+def _qto_value(e, qset_name, quantity_name):
+    """Value of a named quantity inside a named IfcElementQuantity, or None."""
+    for rel in (e.IsDefinedBy or []):
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        pd = rel.RelatingPropertyDefinition
+        if not pd.is_a("IfcElementQuantity") or pd.Name != qset_name:
+            continue
+        for q in pd.Quantities:
+            if q.Name != quantity_name:
+                continue
+            try:
+                if q.is_a("IfcQuantityLength"):
+                    return q.LengthValue
+                if q.is_a("IfcQuantityArea"):
+                    return q.AreaValue
+                if q.is_a("IfcQuantityVolume"):
+                    return q.VolumeValue
+                if q.is_a("IfcQuantityCount"):
+                    return q.CountValue
+                if q.is_a("IfcQuantityWeight"):
+                    return q.WeightValue
+            except Exception:
+                pass
+    return None
+
+
+def _elem_material(e):
+    """Primary material name of an element (None if absent).
+
+    Handles IfcMaterial, IfcMaterialLayerSet(Usage), IfcMaterialProfileSet,
+    IfcMaterialConstituentSet, IfcMaterialList — returns the first usable name.
+    """
+    for rel in (e.HasAssociations or []):
+        if not rel.is_a("IfcRelAssociatesMaterial"):
+            continue
+        mr = rel.RelatingMaterial
+        if mr.is_a("IfcMaterial"):
+            return mr.Name
+        if mr.is_a("IfcMaterialLayerSet"):
+            for l in mr.MaterialLayers:
+                if l.Material and l.Material.Name:
+                    return l.Material.Name
+        if mr.is_a("IfcMaterialLayerSetUsage"):
+            mls = mr.ForLayerSet
+            if mls and mls.MaterialLayers:
+                for l in mls.MaterialLayers:
+                    if l.Material and l.Material.Name:
+                        return l.Material.Name
+        if mr.is_a("IfcMaterialProfileSet"):
+            for mp in mr.MaterialProfiles:
+                if mp.Material and mp.Material.Name:
+                    return mp.Material.Name
+        if mr.is_a("IfcMaterialConstituentSet"):
+            for mc in mr.MaterialConstituents:
+                if mc.Material and mc.Material.Name:
+                    return mc.Material.Name
+        if mr.is_a("IfcMaterialList") and mr.Materials:
+            return mr.Materials[0].Name
+    return None
+
+
 def _pipe_slope_from_geom(e, settings):
     """Slope (rise/horiz) from a sloped pipe's tessellated geometry — the
     fallback when the model doesn't carry the slope in a property (real IFCs)."""
@@ -160,35 +431,124 @@ def _pipe_slope_from_geom(e, settings):
 
 
 _PIPE_TYPE_RULES = [
-    ("fire", ("fire", "sprinkler", "hydrant", "brand", "消防")),
-    ("drainage", ("sanitary", "soil", "waste", "storm", "drain", "afvoer", "riool",
-                  "hemelwater", "hwa", "regenwater", "排水", "废水", "污")),
-    ("supply", ("domestic", "cold water", "water supply", "waterleiding", "drinkwater",
-                "给水", "供水")),
-    ("hydronic", ("hydronic", "chilled", "heating", "cooling", "cv", "verwarming",
-                  "暖通", "冷冻")),
-    ("gas", ("gas", "燃气")),
-    ("vent", ("exhaust", "vent", "air", "lucht")),
+    ("fire", ("fire", "sprinkler", "hydrant", "fire hydrant", "brand",
+              "消防", "喷淋", "消火栓")),
+    ("drainage", ("sanitary", "soil", "waste", "storm", "drain", "afvoer",
+                  "riool", "hemelwater", "hwa", "regenwater", "lab waste",
+                  "condensate", "排水", "废水", "污", "雨水", "冷凝", "实验室废水")),
+    ("supply", ("domestic", "cold water", "water supply", "waterleiding",
+                "drinkwater", "domestic hot water", "hot water",
+                "给水", "供水", "生活热水", "热水")),
+    ("hydronic", ("hydronic", "chilled", "heating", "cooling", "cv",
+                  "verwarming", "chilled water",
+                  "暖通", "冷冻", "空调水")),
+    ("gas", ("gas", "燃气", "天然气")),
+    ("lab_gas", ("compressed air", "vacuum", "nitrogen", "oxygen", "argon",
+                 "lab gas", "cda", "n2", "o2", "co2",
+                 "压缩空气", "真空", "氮气", "氧气", "氩气", "实验气", "工艺气体")),
+    ("vent", ("exhaust", "vent", "air", "lucht", "fume hood", "general exhaust",
+              "排风", "通风柜排风", "一般排风", "送排风")),
+]
+
+
+_DUCT_TYPE_RULES = [
+    ("supply_air", ("supply air", "supply", "saf", "送风", "送風", "空调送风")),
+    ("return_air", ("return air", "return", "raf", "回风", "回風")),
+    ("exhaust_air", ("exhaust", "general exhaust", "gef", "vent", "排风", "排風",
+                     "fume hood", "通风柜排风", "通风柜")),
+    ("outside_air", ("outside air", "outside", "oaf", "fresh air", "新风", "室外风")),
+    ("smoke_exhaust", ("smoke", "smoke exhaust", "排烟", "消防排烟")),
 ]
 
 
 def _classify_pipe_type(e):
-    """Classify a real pipe's purpose from its IFC properties.
+    """Classify a pipe/duct/fitting's purpose from multiple IFC data sources.
 
-    Real exports carry the system role in PSet_Revit_Mechanical (System Type /
-    System Name) or Pset_PipeSegmentCommon; falls back to the element name.
-    Returns one of: fire / drainage / supply / hydronic / gas / vent / unknown.
+    Priority: ArchCheckPipeParams Pset → system Psets (Revit/Common) → type object
+    name → material name → element name → unknown. Works on IFC2X3 and IFC4.
+
+    Returns one of the keys in _PIPE_TYPE_RULES or 'unknown'.
     """
-    text = " ".join(filter(None, [
-        _pset_value(e, "PSet_Revit_Mechanical", "System Type"),
-        _pset_value(e, "PSet_Revit_Mechanical", "System Name"),
-        _pset_value(e, "Pset_PipeSegmentCommon", "FlowDirection"),
-        e.Name or "",
-    ])).lower()
+    # 1. ArchCheck override Pset (highest priority, used by manual editors)
+    override = _pset_value(e, "ArchCheckPipeParams", "pipe_type")
+    if override:
+        return override
+    # 2. Build a text blob from all system-indicating sources
+    text_parts = []
+    # Standard Psets
+    for pset, prop in [("Pset_PipeSegmentCommon", "System"),
+                        ("Pset_PipeSegmentTypeCommon", "SystemType"),
+                        ("Pset_DuctSegmentCommon", "System"),
+                        ("Pset_DuctSegmentTypeCommon", "SystemType")]:
+        v = _pset_value(e, pset, prop)
+        if v:
+            text_parts.append(str(v))
+    # Revit-specific
+    for pset, prop in [("PSet_Revit_Mechanical", "System Type"),
+                        ("PSet_Revit_Mechanical", "System Name"),
+                        ("PSet_Revit_Mechanical", "System Classification"),
+                        ("Pset_PipeSegmentCommon", "FlowDirection")]:
+        v = _pset_value(e, pset, prop)
+        if v:
+            text_parts.append(str(v))
+    # Element name
+    text_parts.append(e.Name or "")
+    # 3. Type object name (IfcPipeSegmentType / IfcDuctSegmentType / IfcPipeFittingType)
+    type_name = _type_object_name(e)
+    if type_name:
+        text_parts.append(type_name)
+    # 4. Material name (last resort: material hints at system, e.g. "Fire Sprinkler Pipe")
+    mat = _elem_material(e)
+    if mat:
+        text_parts.append(mat)
+    text = " ".join(filter(None, text_parts)).lower()
     for pipe_type, kws in _PIPE_TYPE_RULES:
         if any(k in text for k in kws):
             return pipe_type
     return "unknown"
+
+
+def _classify_duct_type(e):
+    """Classify a duct's purpose using the same multi-source strategy."""
+    override = _pset_value(e, "ArchCheckDuctParams", "duct_type")
+    if override:
+        return override
+    text_parts = []
+    for pset, prop in [("Pset_DuctSegmentCommon", "System"),
+                        ("Pset_DuctSegmentTypeCommon", "SystemType"),
+                        ("PSet_Revit_Mechanical", "System Type"),
+                        ("PSet_Revit_Mechanical", "System Name")]:
+        v = _pset_value(e, pset, prop)
+        if v:
+            text_parts.append(str(v))
+    text_parts.append(e.Name or "")
+    type_name = _type_object_name(e)
+    if type_name:
+        text_parts.append(type_name)
+    mat = _elem_material(e)
+    if mat:
+        text_parts.append(mat)
+    text = " ".join(filter(None, text_parts)).lower()
+    for duct_type, kws in _DUCT_TYPE_RULES:
+        if any(k in text for k in kws):
+            return duct_type
+    return "unknown"
+
+
+def _type_object_name(e):
+    """Name of the element's type object (IfcTypeObject) via IfcRelDefinesByType,
+    or None. Falls back to IFC4-style HasPredefinedType /ElementType attribute."""
+    # via IfcRelDefinesByType (both IFC2X3 and IFC4)
+    for rel in (e.HasAssociations or []):
+        if rel.is_a("IfcRelDefinesByType"):
+            rt = rel.RelatingType
+            if rt and rt.Name:
+                return rt.Name
+    # IFC4: some types expose ElementType directly
+    et = getattr(e, "ElementType", None)
+    if et:
+        return et
+    return None
 
 
 def _any_prop_value(e, prop_name):
@@ -207,63 +567,264 @@ def _any_prop_value(e, prop_name):
     return None
 
 
-def _pipe_data(e, scale, settings):
-    """Real pipe data for a contained IfcFlowSegment: type/diameter/slope from
-    ArchCheckPipeParams (Pset), geometry bbox as fallback for diameter/length,
-    geometry rise/horiz as fallback for slope."""
-    pipe_type = _pset_value(e, "ArchCheckPipeParams", "pipe_type") or _classify_pipe_type(e)
-    diameter = _pset_value(e, "ArchCheckPipeParams", "diameter_m")
-    slope = _pset_value(e, "ArchCheckPipeParams", "slope")
-    length = None
+def _pipe_profile_diameter(e, declared_scale):
+    """Diameter (m) from IfcCircleProfileDef inside an IfcExtrudedAreaSolid.
+
+    More precise than bbox for circular pipes — returns None if the geometry
+    isn't a simple circular extrusion. ``declared_scale`` is the metres-per-unit
+    of the model's *declared* length unit (profile dims use declared units,
+    not world-coordinate units — they can differ in mixed-unit models).
+    """
+    if not e.Representation:
+        return None
+    for rep in e.Representation.Representations or []:
+        for item in rep.Items or []:
+            if not item.is_a("IfcExtrudedAreaSolid"):
+                continue
+            sa = item.SweptArea
+            if sa.is_a("IfcCircleProfileDef"):
+                return sa.Radius * 2.0 * declared_scale
+            if sa.is_a("IfcCircleHollowProfileDef"):
+                return sa.Radius * 2.0 * declared_scale
+    return None
+
+
+def _try_best_scale(raw_value, ref_value, scale_a, scale_b, size_key, tol=0.3):
+    """Try two scales on a raw value; return (best_value, best_scale) that is
+    closer to ``ref_value`` within tolerance, or (None, None)."""
+    if raw_value is None or ref_value is None or ref_value <= 0:
+        return None, None
+    candidates = []
+    for s in (scale_a, scale_b):
+        v = raw_value * s
+        if v <= 0:
+            continue
+        err = abs(v - ref_value) / ref_value
+        if err < tol and _is_plausible(v, size_key):
+            candidates.append((err, v, s))
+    if not candidates:
+        return None, None
+    candidates.sort()
+    return candidates[0][1], candidates[0][2]
+
+
+def _pipe_data(e, scale, settings, profile_scale=None):
+    """Real pipe data for an IfcFlowSegment / IfcPipeSegment.
+
+    Extraction priority:
+      1. ArchCheckPipeParams Pset (manual override) — in metres
+      2. IfcElementQuantity / Qto — scale from ``profile_scale``
+      3. IfcCircleProfileDef (extrusion cross-section) — scale from ``profile_scale``
+      4. Tessellated geometry bbox — in ``scale`` (world units)
+
+    ``profile_scale`` is the unit scale for Qto and ProfileDef data. If None
+    (confidence low), falls back to per-element cross-checking against bbox.
+    """
+    pipe_type = _classify_pipe_type(e)
     d = _elem_bbox_dims(e, scale, settings)
-    if d:
-        dims = sorted(d)
-        length = round(dims[2], 3)
+    bbox_dia = min(d) if d else None
+
+    diameter = None
+    _override = _pset_value(e, "ArchCheckPipeParams", "diameter_m")
+    if _override is not None:
+        diameter = float(_override)
+
+    if diameter is None and profile_scale is not None:
+        _qto = _qto_value(e, "Qto_PipeSegmentBaseQuantities", "OuterDiameter")
+        if _qto is not None:
+            diameter = _qto * profile_scale
+            if not _is_plausible(diameter, "pipe_diameter"):
+                diameter = None
         if diameter is None:
-            diameter = round(dims[0], 3)
+            p_dia = _pipe_profile_diameter(e, profile_scale)
+            if p_dia is not None and _is_plausible(p_dia, "pipe_diameter"):
+                diameter = p_dia
+
+    if diameter is None:
+        # Low confidence: cross-check both declared vs world scale against bbox
+        # We need declared_scale but don't have it here — try both extreme scales.
+        # Use scale and 1000*scale as two candidates (covers mm↔m flip).
+        scale_b = scale * 1000.0 if scale < 0.01 else scale / 1000.0
+        _qto = _qto_value(e, "Qto_PipeSegmentBaseQuantities", "OuterDiameter")
+        if _qto is not None and bbox_dia is not None:
+            diameter, _ = _try_best_scale(_qto, bbox_dia, scale, scale_b, "pipe_diameter")
+        if diameter is None:
+            # Try profile def
+            p_raw = _pipe_profile_diameter(e, 1.0)  # raw (one model unit = 1m)
+            if p_raw and bbox_dia is not None:
+                diameter, _ = _try_best_scale(p_raw, bbox_dia, scale, scale_b, "pipe_diameter")
+
+    if diameter is None and bbox_dia is not None:
+        diameter = bbox_dia
     if diameter is not None:
-        diameter = round(float(diameter), 3)
+        diameter = round(float(diameter), 4)
+
+    # length: Qto → bbox
+    length = None
+    _qto_len = _qto_value(e, "Qto_PipeSegmentBaseQuantities", "Length")
+    if _qto_len is not None:
+        length = _qto_len * scale
+    elif d:
+        length = round(max(d), 3)
+
+    # slope: Pset override → any Pset "Slope" → geometry rise/run
+    slope = _pset_value(e, "ArchCheckPipeParams", "slope")
     if slope is None:
-        # real IFCs often carry slope in a property (e.g. PSet_Revit_Constraints.Slope)
         _real = _any_prop_value(e, "Slope")
         try:
             _real = float(_real)
-            if not (0.0 <= _real <= 1.0):   # reject corrupt/unit-mismatched values
+            if not (0.0 <= _real <= 1.0):
                 _real = None
         except (TypeError, ValueError):
             _real = None
         slope = _real if _real is not None else _pipe_slope_from_geom(e, settings)
     if slope is not None:
-        slope = round(float(slope), 3)
+        slope = round(float(slope), 4)
+
+    material = _elem_material(e)
+
     out = {"name": e.Name or e.GlobalId, "pipe_type": pipe_type,
-           "diameter_m": diameter, "slope": slope, "length_m": length}
-    # fire hydrant spacing: store bbox centroid for inter-pipe distance computation
+           "diameter_m": diameter, "slope": slope, "length_m": length,
+           "material": material}
+    # fire hydrant spacing centroid
     if pipe_type == "fire":
         _c = _elem_bbox_centroid(e, scale, settings)
         if _c:
             out["_centroid"] = _c
-    # drainage stack diameter: only for geometrically-vertical drainage runs
-    # (z-extent dominant), so a horizontal branch isn't mistaken for a stack.
+    # drainage stack detection
     if pipe_type == "drainage" and d and d[2] > max(d[0], d[1]) * 1.5:
-        out["vertical_drain_diameter_m"] = round(min(d[0], d[1]), 3)
+        out["vertical_drain_diameter_m"] = round(min(d[0], d[1]), 4)
     return out
 
 
-def _duct_data(e, scale, settings):
-    """Real HVAC duct data: cross-section + clear net height from
-    ArchCheckDuctParams (Pset), length from geometry bbox."""
+def _duct_cross_section(e, scale, settings):
+    """(width_m, height_m) of a duct's cross-section, perpendicular to its length.
+
+    For rectangular ducts this is the two shorter bbox dimensions; for flat oval /
+    round ducts we approximate from the bbox. Returns (None, None) if geometry
+    cannot be tessellated.
+    """
+    d = _elem_bbox_dims(e, scale, settings)
+    if not d:
+        return None, None
+    dims = sorted(d)  # smallest, middle, largest (= length)
+    return round(dims[0], 4), round(dims[1], 4)
+
+
+def _duct_data(e, scale, settings, profile_scale=None):
+    """Real HVAC duct data with multi-source extraction priority.
+
+    Priority: ArchCheckDuctParams Pset → Qto (profile_scale) → bbox geometry.
+    When ``profile_scale`` is None (low confidence), Qto values are
+    cross-checked against bbox per-element.
+    """
+    duct_type = _classify_duct_type(e)
+    d = _elem_bbox_dims(e, scale, settings)
+    gw, gh = _duct_cross_section(e, scale, settings)
+
+    def _resolve_qto(qty_name, bbox_ref, size_key):
+        qv = _qto_value(e, "Qto_DuctSegmentBaseQuantities", qty_name)
+        if qv is None or bbox_ref is None or bbox_ref <= 0:
+            return None
+        if profile_scale is not None:
+            v = qv * profile_scale
+            if _is_plausible(v, size_key):
+                return v
+            return None
+        # Per-element fallback: try both scale and scale*1000 (mm↔m flip)
+        scale_b = scale * 1000.0 if scale < 0.01 else scale / 1000.0
+        best, _ = _try_best_scale(qv, bbox_ref, scale, scale_b, size_key)
+        return best
+
     width = _pset_value(e, "ArchCheckDuctParams", "duct_width_m")
     height = _pset_value(e, "ArchCheckDuctParams", "duct_height_m")
+    if width is not None:
+        width = round(float(width), 4)
+    if height is not None:
+        height = round(float(height), 4)
+    if width is None:
+        w = _resolve_qto("Width", gw, "duct_side")
+        width = round(w, 4) if w is not None else gw
+    if height is None:
+        h = _resolve_qto("Height", gh, "duct_side")
+        height = round(h, 4) if h is not None else gh
+
     net = _pset_value(e, "ArchCheckDuctParams", "net_height_m")
+    if net is not None:
+        net = round(float(net), 4)
+
     length = None
-    d = _elem_bbox_dims(e, scale, settings)
-    if d:
+    bbox_len = max(d) if d else None
+    if bbox_len and bbox_len > 0:
+        _ql = _qto_value(e, "Qto_DuctSegmentBaseQuantities", "Length")
+        if _ql is not None:
+            if profile_scale is not None:
+                v = _ql * profile_scale
+                if abs(v - bbox_len) / bbox_len < 0.3:
+                    length = round(v, 3)
+            else:
+                scale_b = scale * 1000.0 if scale < 0.01 else scale / 1000.0
+                v, _ = _try_best_scale(_ql, bbox_len, scale, scale_b, "duct_side", tol=0.5)
+                if v is not None:
+                    length = round(v, 3)
+    if length is None and d:
         length = round(max(d), 3)
-    return {"name": e.Name or e.GlobalId,
-            "duct_width_m": round(float(width), 3) if width is not None else None,
-            "duct_height_m": round(float(height), 3) if height is not None else None,
-            "net_height_m": round(float(net), 3) if net is not None else None,
-            "length_m": length}
+
+    material = _elem_material(e)
+    return {"name": e.Name or e.GlobalId, "duct_type": duct_type,
+            "duct_width_m": width, "duct_height_m": height,
+            "net_height_m": net, "length_m": length, "material": material}
+
+
+_FITTING_TYPE_RULES = [
+    ("elbow", ("elbow", "ellbow", "bend", "弯头", "弯管")),
+    ("tee", ("tee", "t-piece", "t branch", "三通", "丁字")),
+    ("transition", ("transition", "reducer", "expander", "变径", "异径", "大小头")),
+    ("cross", ("cross", "four-way", "四通")),
+    ("cap", ("cap", "plug", "end cap", "堵头", "管帽")),
+    ("trap", ("trap", "存水弯", "s弯", "p弯", "s trap", "p trap")),
+    ("flange", ("flange", "法兰")),
+    ("union", ("union", "活接", "接头")),
+    ("valve", ("valve", "gate", "butterfly", "check", "球阀", "闸阀", "蝶阀", "止回阀", "阀门")),
+]
+
+
+def _classify_fitting_type(e):
+    """Classify an IfcPipeFitting / IfcDuctFitting by PredefinedType + name keywords.
+
+    Returns one of: elbow / tee / transition / cross / cap / trap / flange / union /
+    valve / unknown.
+    """
+    predef = getattr(e, "PredefinedType", None)
+    if predef and predef not in ("USERDEFINED", "NOTDEFINED", None):
+        mapping = {"ELBOW": "elbow", "TEE": "tee", "TRANSITION": "transition",
+                   "JUNCTION": "tee", "CROSS": "cross", "CAP": "cap",
+                   "TRAP": "trap", "UNION": "union", "FLANGE": "flange"}
+        if predef in mapping:
+            return mapping[predef]
+    name = (e.Name or "").lower()
+    for ftype, kws in _FITTING_TYPE_RULES:
+        if any(k in name for k in kws):
+            return ftype
+    return "unknown"
+
+
+def _pipe_fitting_data(e, scale, settings):
+    """Extract data for an IfcPipeFitting: type, size, material, bbox centroid."""
+    ftype = _classify_fitting_type(e)
+    pipe_type = _classify_pipe_type(e)
+    d = _elem_bbox_dims(e, scale, settings)
+    size_m = None
+    if d:
+        size_m = round(min(d[0], d[1]), 4)  # smaller cross-section dim = nominal size
+    material = _elem_material(e)
+    centroid = _elem_bbox_centroid(e, scale, settings)
+    out = {"name": e.Name or e.GlobalId, "fitting_type": ftype,
+           "pipe_type": pipe_type, "size_m": size_m, "material": material,
+           "length_m": round(max(d), 4) if d else None}
+    if centroid:
+        out["_centroid"] = centroid
+    return out
 
 
 def _electrical_equip_kind(e):
@@ -430,21 +991,18 @@ def _point_in_mesh(px, py, pz, verts, faces):
     return inside
 
 
-def _detect_clashes(els, settings, margin=0.05):
-    """Cross-discipline clash pre-check between MEP (pipe/duct) and structure
-    (beam/slab/wall). bbox overlap (depth > margin) produces candidates; each is
-    then CONFIRMED by point-in-mesh (any MEP vertex strictly inside the solid).
-    Columns are excluded (pipes commonly run alongside them). Returns
-    [{mep, vs, type, depth, confirmed}]."""
-    mep = [e for e in els if e.is_a("IfcFlowSegment") or e.is_a("IfcDuctSegment")]
-    solid = [e for e in els
-             if e.is_a("IfcBeam") or e.is_a("IfcSlab") or e.is_a("IfcWall") or e.is_a("IfcWallStandardCase")]
+def _detect_clashes_list(mep_els, solid_els, settings, margin=0.05):
+    """Cross-discipline clash pre-check between two element lists.
+
+    bbox overlap (depth > margin) produces candidates; each is then CONFIRMED
+    by point-in-mesh (any MEP vertex strictly inside the solid).
+    Returns [{mep, vs, type, depth, confirmed}]."""
     out = []
-    for a in mep:
+    for a in mep_els:
         ba = _elem_world_bbox(a, settings)
         if not ba:
             continue
-        for b in solid:
+        for b in solid_els:
             bb = _elem_world_bbox(b, settings)
             if not bb:
                 continue
@@ -456,6 +1014,17 @@ def _detect_clashes(els, settings, margin=0.05):
                             "type": b.is_a(), "depth": round(min(ox, oy, oz), 2),
                             "confirmed": _confirm_clash(a, b, settings)})
     return out
+
+
+def _detect_clashes(els, settings, margin=0.05):
+    """Cross-discipline clash pre-check between MEP (pipe/duct) and structure
+    (beam/slab/wall). Convenience wrapper that splits one list into MEP vs solid.
+    """
+    mep = [e for e in els if e.is_a("IfcFlowSegment") or e.is_a("IfcDuctSegment")
+           or e.is_a("IfcPipeFitting") or e.is_a("IfcDuctFitting")]
+    solid = [e for e in els
+             if e.is_a("IfcBeam") or e.is_a("IfcSlab") or e.is_a("IfcWall") or e.is_a("IfcWallStandardCase")]
+    return _detect_clashes_list(mep, solid, settings, margin)
 
 
 def _confirm_clash(a, b, settings):
@@ -547,26 +1116,6 @@ def _elem_bbox_centroid(elem, scale, settings):
                 (min(zs) + max(zs)) / 2 * scale)
     except Exception:
         return None
-
-
-def _elem_material(e):
-    """Material name of an element (None if absent). Handles IfcMaterial,
-    IfcMaterialLayerSetUsage (first layer) and IfcMaterialList associations."""
-    for rel in (e.HasAssociations or []):
-        if not rel.is_a("IfcRelAssociatesMaterial"):
-            continue
-        mr = rel.RelatingMaterial
-        if mr.is_a("IfcMaterial"):
-            return mr.Name
-        if mr.is_a("IfcMaterialLayerSetUsage"):
-            mls = mr.ForLayerSet
-            if mls and mls.MaterialLayers:
-                for l in mls.MaterialLayers:
-                    if l.Material and l.Material.Name:
-                        return l.Material.Name
-        if mr.is_a("IfcMaterialList") and mr.Materials:
-            return mr.Materials[0].Name
-    return None
 
 
 def _material_volumes(elements):
@@ -795,21 +1344,47 @@ def _space_bounding_box(space):
     return None
 
 
-def _space_hull(space, settings):
+def _space_bbox_rect(space):
+    """(x0, y0, x1, y1) world-XY rectangle (raw authored units) of a space's
+    IfcBoundingBox: its four corners transformed through the ObjectPlacement
+    chain. Rotation/mirror in the placement (not just the origin) matters —
+    Schependomlaan's storey frames are rotated 90°, which swaps the bbox's X/Y
+    extents in world space. None if there is no bbox or no resolvable placement."""
+    bb = _space_bounding_box(space)
+    if not bb:
+        return None
+    try:
+        import ifcopenshell.util.placement as _place_util
+        if space.ObjectPlacement is None:
+            return None
+        mat = _place_util.get_local_placement(space.ObjectPlacement)
+    except Exception:
+        return None
+    w, d = bb
+    xs = []
+    ys = []
+    for lx, ly in ((0.0, 0.0), (w, 0.0), (0.0, d), (w, d)):
+        xs.append(mat[0][0] * lx + mat[0][1] * ly + mat[0][3])
+        ys.append(mat[1][0] * lx + mat[1][1] * ly + mat[1][3])
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _space_hull(space, settings, bbox_scale=1.0):
     """(convex_hull_xy, centroid_xy, precise_area_units) of a space's tessellated
     XY projection. Coordinates in model units. precise_area_units is the exact
     2D outline area (positive-signed projected triangles — handles concave rooms,
     which the convex hull overestimates), or None when the mesh has no faces.
-    Spaces without any tessellatable geometry fall back to their IfcBoundingBox
-    area; if there is no geometry at all, area_units is None (area unknown)."""
+    Spaces without tessellatable geometry fall back to a placement-aligned
+    rectangle built from their IfcBoundingBox (bbox_scale converts the bbox's
+    authored unit into model units); if there is no geometry and no bbox at all,
+    area_units is None (area unknown)."""
     try:
         shape = ifcgeom.create_shape(settings, space)
         v = shape.geometry.verts
         f = shape.geometry.faces
         pts = sorted(set((v[i], v[i + 1]) for i in range(0, len(v), 3)))
         if len(pts) < 3:
-            bb = _space_bounding_box(space)
-            return None, None, (bb[0] * bb[1]) if bb else None, bool(bb)
+            return _bbox_hull(space, bbox_scale)
         def cross(o, a, b):
             return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
         lo = []
@@ -839,8 +1414,21 @@ def _space_hull(space, settings):
                 area_units = pos
         return hull, centroid, area_units, False
     except Exception:
-        bb = _space_bounding_box(space)
-        return None, None, (bb[0] * bb[1]) if bb else None, bool(bb)
+        return _bbox_hull(space, bbox_scale)
+
+
+def _bbox_hull(space, bbox_scale=1.0):
+    """Rectangle hull for a space that only has an IfcBoundingBox (no solid mesh):
+    returns (rect_polygon, rect_centroid, None, True) when a placement resolves,
+    else the legacy (None, None, bbox_area_units, True) so the caller can still
+    get an area from the raw bbox product."""
+    rect = _space_bbox_rect(space)
+    if rect:
+        x0, y0, x1, y1 = [c * bbox_scale for c in rect]
+        return ([(x0, y0), (x1, y0), (x1, y1), (x0, y1)],
+                ((x0 + x1) / 2, (y0 + y1) / 2), None, True)
+    bb = _space_bounding_box(space)
+    return None, None, (bb[0] * bb[1]) if bb else None, bool(bb)
 
 
 def _hull_area(hull, scale):
@@ -911,8 +1499,11 @@ def _associate_doors(space_geom, door_geom, scale, spaces, space_storey, door_st
             if el and el.is_a("IfcDoor"):
                 assoc.setdefault(s.GlobalId, set()).add(el.GlobalId)
     threshold = DOOR_ASSOC_DIST_M / scale
+    # Geometry only fills in rooms with no boundary data — trust IfcRelSpaceBoundary
+    # where the model provides it (the bbox-rect footprint is an approximation and
+    # would over-count doors for boundary-backed rooms, e.g. Schependomlaan's lobby).
     for gid, (hull, _, _) in space_geom.items():
-        if not hull:
+        if not hull or gid in assoc:
             continue
         sg = space_storey.get(gid)
         for dg, (_, centroid) in door_geom.items():
@@ -1124,6 +1715,14 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         raise RuntimeError("ifcopenshell is not installed.")
     path = str(path)
     scale = _length_scale(m)
+    # Declared length unit — profile definitions / Qto / bounding-box dims use
+    # this, which can differ from the world-coordinate scale in mixed-unit
+    # models (e.g. declared mm but geometry in m).
+    declared_scale = _declared_length_scale(m) or scale
+    # IfcBoundingBox is authored in the declared unit (often mm), which can
+    # differ from the solid-geometry scale (Schependomlaan: mm bbox, m solids).
+    # bbox_scale converts bbox units into model units for rectangle hulls.
+    bbox_scale = declared_scale / scale
     # mixed-unit models (e.g. Schependomlaan): geometry is metre-scale but storey
     # elevations are in mm — normalise elevations separately for display / z-assignment.
     elev_scale = scale
@@ -1135,6 +1734,17 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         pass
     geom_settings = ifcgeom.settings()
     geom_settings.set(geom_settings.USE_WORLD_COORDS, True)
+
+    # Infer the unit scale of Qto / ProfileDef data by sampling and voting.
+    # profile_scale_confident = True → use globally; False → per-element fallback.
+    profile_scale, profile_scale_confident, profile_scale_diag = _infer_profile_scale(
+        m, scale, declared_scale, geom_settings)
+    if not profile_scale_confident:
+        # Not confident? Pass None to per-element functions so they fall back
+        # to their own cross-check against bbox.
+        profile_scale_for_extract = None
+    else:
+        profile_scale_for_extract = profile_scale
 
     project = m.by_type("IfcProject")
     project_name = project[0].Name if project else None
@@ -1225,6 +1835,49 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                     idx = i
             electrical_fallback.setdefault(storeys[idx].GlobalId, []).append(e)
 
+    # MEP fallback: pipes / ducts / fittings are often under building/site, not
+    # a storey (especially MEP-only models). Assign uncontained elements to the
+    # nearest storey by their world z-centroid so they enter the per-floor review.
+    mep_pipe_fallback = {}
+    mep_duct_fallback = {}
+    mep_fitting_fallback = {}
+    if storeys:
+        kept_els_gids3 = {e.GlobalId for st in storeys for e in by_storey.get(st.GlobalId, [])}
+
+        def _assign_to_storey(elem, storeys_list, elevs_list, settings):
+            b = _elem_world_bbox(elem, settings)
+            if not b:
+                return None
+            zc = (b[4] + b[5]) / 2
+            idx = 0
+            for i, ev in enumerate(elevs_list):
+                if zc >= ev:
+                    idx = i
+            return storeys_list[idx].GlobalId
+
+        # MEP fallback: pipes / ducts / fittings are often under building/site, not
+        # a storey (especially MEP-only models). Assign uncontained elements to the
+        # nearest storey by their world z-centroid so they enter the per-floor review.
+        # IfcFlowSegment covers pipes+ducts and IfcFlowFitting covers fittings in
+        # BOTH schemas (IFC4-only IfcPipeSegment/IfcDuctSegment/IfcPipeFitting can't
+        # be used with by_type on IFC2X3), then split by subtype/name.
+        for e in m.by_type("IfcFlowSegment"):
+            if e.GlobalId in kept_els_gids3:
+                continue
+            sg = _assign_to_storey(e, storeys, elevs, geom_settings)
+            if not sg:
+                continue
+            if _is_duct_segment(e):
+                mep_duct_fallback.setdefault(sg, []).append(e)
+            else:
+                mep_pipe_fallback.setdefault(sg, []).append(e)
+        for e in m.by_type("IfcFlowFitting"):
+            if e.GlobalId in kept_els_gids3:
+                continue
+            sg = _assign_to_storey(e, storeys, elevs, geom_settings)
+            if sg and _is_pipe_fitting(e):
+                mep_fitting_fallback.setdefault(sg, []).append(e)
+
     space_geom = {}
     space_storey = {}
     kept_spaces = []
@@ -1232,7 +1885,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         if sg not in kept_storey_gids:
             continue
         for sp in slist:
-            hull, centroid, area_units, is_bbox = _space_hull(sp, geom_settings)
+            hull, centroid, area_units, is_bbox = _space_hull(sp, geom_settings, bbox_scale)
             if area_units:
                 # bounding-box spaces are mm-scale in mixed models (like storey
                 # elevations) while solid geometry is metre-scale
@@ -1279,12 +1932,17 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 s = _ramp_slope(e, scale)
                 if s is not None:
                     ramp_slopes.append(s)
+        # Structural elements (with z-fallback for uncontained columns/beams/slabs)
+        all_struct_els = els + structural_fallback.get(storey.GlobalId, [])
         elements, col_sec, beam_sec, slab_th, unit_suspicious = _structural_sections(
-            els + structural_fallback.get(storey.GlobalId, []), geom_settings, scale)
+            all_struct_els, geom_settings, scale)
+
         plan_elems = _plan_elements(els, geom_settings) if extract_plan else []
-        clashes = _detect_clashes(els, geom_settings) if extract_plan else []
-        pipe_elems = [e for e in els if e.is_a("IfcFlowSegment") and not e.is_a("IfcDuctSegment")]
-        pipes = [_pipe_data(e, scale, geom_settings) for e in pipe_elems]
+
+        # Pipes (storey-contained + z-fallback)
+        pipe_elems = [e for e in els if _is_pipe_segment(e) and not _is_duct_segment(e)]
+        pipe_elems += mep_pipe_fallback.get(storey.GlobalId, [])
+        pipes = [_pipe_data(e, scale, geom_settings, profile_scale_for_extract) for e in pipe_elems]
         # fire hydrant spacing: distance to nearest other fire pipe centroid
         fire_centroids = [(i, p["_centroid"]) for i, p in enumerate(pipes)
                           if p.get("_centroid")]
@@ -1298,7 +1956,28 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                     pipes[i]["hydrant_spacing_m"] = pipes[i].get("length_m") or 0.0
         for p in pipes:
             p.pop("_centroid", None)
-        ducts = [_duct_data(e, scale, geom_settings) for e in els if e.is_a("IfcDuctSegment")]
+
+        # Pipe fittings (storey-contained + z-fallback)
+        fitting_elems = [e for e in els if _is_pipe_fitting(e)]
+        fitting_elems += mep_fitting_fallback.get(storey.GlobalId, [])
+        pipe_fittings = [_pipe_fitting_data(e, scale, geom_settings) for e in fitting_elems]
+        for pf in pipe_fittings:
+            pf.pop("_centroid", None)
+
+        # Ducts (storey-contained + z-fallback)
+        duct_elems = [e for e in els if _is_duct_segment(e)]
+        duct_elems += mep_duct_fallback.get(storey.GlobalId, [])
+        ducts = [_duct_data(e, scale, geom_settings, profile_scale_for_extract) for e in duct_elems]
+
+        # Clash detection: include all MEP + structural elements on this floor
+        all_mep_els = pipe_elems + duct_elems + fitting_elems
+        if extract_plan:
+            clash_els = [e for e in all_struct_els if e.is_a("IfcBeam")
+                         or e.is_a("IfcSlab") or e.is_a("IfcWall")
+                         or e.is_a("IfcWallStandardCase")]
+            clashes = _detect_clashes_list(all_mep_els, clash_els, geom_settings)
+        else:
+            clashes = []
         equip = [q for q in (_equip_centroid(e, geom_settings) for e in els
                              if e.is_a("IfcElectricAppliance") or e.is_a("IfcLightFixture")) if q]
         room_type_map = {}
@@ -1358,6 +2037,9 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 room["has_exit_sign"] = (s.Name or "?") in exit_sign_rooms
             rooms.append(room)
 
+        n_pipe_fit = len(pipe_fittings)
+        n_pipes = len(pipes)
+        n_ducts = len(ducts)
         floors.append({
             "name": storey.Name or "?",
             "elevation_m": round((storey.Elevation or 0.0) * elev_scale, 2),
@@ -1369,6 +2051,9 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "columns": types.get("IfcColumn", 0) + types.get("IfcColumnStandardCase", 0),
                 "beams": types.get("IfcBeam", 0),
                 "slabs": types.get("IfcSlab", 0) + types.get("IfcSlabStandardCase", 0),
+                "pipe_fittings": n_pipe_fit,
+                "pipes": n_pipes,
+                "ducts": n_ducts,
                 "column_sections": col_sec,
                 "beam_sections": beam_sec,
                 "slab_thicknesses": slab_th,
@@ -1387,6 +2072,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
             "plan_elements": plan_elems,
             "clashes": clashes,
             "pipes": pipes,
+            "pipe_fittings": pipe_fittings,
             "ducts": ducts,
             "electrical_equipment": equip,
             "electrical_elements": electrical,
@@ -1403,6 +2089,15 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         "total_rooms": sum(len(f["rooms"]) for f in floors),
         "building_fire_stats": {"fire_elevators": fire_elevators,
                                 "fire_extinguishers": fire_extinguishers},
+        "scale_info": {
+            "world_scale": scale,
+            "declared_scale": declared_scale,
+            "elev_scale": elev_scale,
+            "bbox_scale": bbox_scale,
+            "profile_scale": profile_scale,
+            "profile_scale_confident": profile_scale_confident,
+            "profile_scale_diag": profile_scale_diag,
+        },
         "floors": floors,
     }
 
