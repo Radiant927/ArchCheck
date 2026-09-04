@@ -551,6 +551,33 @@ def _type_object_name(e):
     return None
 
 
+def _classify_system_pipe_type(system_name):
+    """Map an IFC system name onto a pipe_type keyword for the classification
+    fallback when the pipe itself carries no type hint (system membership is a
+    strong signal — e.g. a pipe in the CHILLEDWATER system is hydronic)."""
+    text = (system_name or "").lower()
+    # IFC PredefinedType enum tokens come as one word (CHILLEDWATER, RAINWATER…)
+    tokens = text.replace("_", " ")
+    for pipe_type, kws in _PIPE_TYPE_RULES:
+        if any(k in tokens for k in kws):
+            return pipe_type
+    # IFC enum values without spaces (e.g. "chilledwater") need direct mapping
+    if any(k in tokens for k in ("fireprotection", "fire")) or text == "fire":
+        return "fire"
+    if any(k in text for k in ("drainage", "wastewater", "sewage", "stormwater",
+                                "rainwater", "disposal")):
+        return "drainage"
+    if any(k in text for k in ("watersupply", "coldwater", "hotwater", "domestic")):
+        return "supply"
+    if any(k in text for k in ("chilledwater", "condenserwater", "heating", "refrigeration")):
+        return "hydronic"
+    if text == "gas" or "gas" in text:
+        return "gas"
+    if any(k in text for k in ("compressedair", "vacuum")):
+        return "lab_gas"
+    return "unknown"
+
+
 def _any_prop_value(e, prop_name):
     """Value of a property searched by name across all the element's Psets."""
     for rel in (e.IsDefinedBy or []):
@@ -824,6 +851,76 @@ def _pipe_fitting_data(e, scale, settings):
            "length_m": round(max(d), 4) if d else None}
     if centroid:
         out["_centroid"] = centroid
+    return out
+
+
+def _pipe_network_topology(m):
+    """Graph connectivity of MEP flow elements via IfcRelConnectsPorts.
+
+    Two elements are neighbours when a port on one is connected (by
+    IfcRelConnectsPorts) to a port on the other. Returns a dict for downstream
+    consumers (per-pipe neighbour names) plus a connectivity report.
+
+    Returns
+    -------
+    {"networks": [{members, count}], "member_count": int,
+     "element_neighbours": {gid: [neighbour_gid]}}
+    If the model has no port data, returns {"member_count": 0, ...} so callers
+    can report "无端口连接数据" honestly.
+    """
+    # port gid -> element gid (which element owns which port)
+    port_owner = {}
+    for rel in m.by_type("IfcRelConnectsPortToElement"):
+        el = rel.RelatedElement
+        if el is None:
+            continue
+        port_owner[rel.RelatingPort.GlobalId] = el.GlobalId
+
+    neighbours = {}
+    connections = m.by_type("IfcRelConnectsPorts")
+    if not connections:
+        return {"networks": [], "member_count": 0, "element_neighbours": {}}
+    for rel in connections:
+        a = port_owner.get(rel.RelatingPort.GlobalId)
+        b = port_owner.get(rel.RelatedPort.GlobalId)
+        if not a or not b or a == b:
+            continue
+        neighbours.setdefault(a, set()).add(b)
+        neighbours.setdefault(b, set()).add(a)
+
+    # Connected components (networks) via BFS over the neighbour graph
+    networks = []
+    seen = set()
+    for gid in neighbours:
+        if gid in seen:
+            continue
+        comp = []
+        stack = [gid]
+        while stack:
+            cur = stack.pop()
+            if cur in seen:
+                continue
+            seen.add(cur)
+            comp.append(cur)
+            stack.extend(neighbours.get(cur, set()) - seen)
+        networks.append({"members": comp, "count": len(comp)})
+    networks.sort(key=lambda n: -n["count"])
+
+    return {
+        "networks": networks,
+        "member_count": sum(n["count"] for n in networks),
+        "element_neighbours": {k: sorted(v) for k, v in neighbours.items()},
+    }
+
+
+def _distribution_system_map(m):
+    """{system_name: [element GlobalIds]} from IfcDistributionSystem members."""
+    out = {}
+    for rel in m.by_type("IfcRelAssignsToGroup"):
+        grp = rel.RelatingGroup
+        if not (grp.is_a("IfcDistributionSystem") or grp.is_a("IfcSystem")):
+            continue
+        out[grp.Name or grp.GlobalId] = [o.GlobalId for o in rel.RelatedObjects]
     return out
 
 
@@ -1746,6 +1843,21 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
     else:
         profile_scale_for_extract = profile_scale
 
+    # Port-based pipe network topology (real IFCs from Revit/Tekla carry ports;
+    # many exports do not — then this honestly reports 0 networks).
+    topology = _pipe_network_topology(m)
+    system_map = _distribution_system_map(m)
+    # element gid -> network index, for per-pipe network attribution below
+    gid_network = {}
+    for i, net in enumerate(topology.get("networks", [])):
+        for gid in net["members"]:
+            gid_network[gid] = i
+    # element gid -> first system name it belongs to
+    gid_system = {}
+    for sys_name, members in system_map.items():
+        for gid in members:
+            gid_system.setdefault(gid, sys_name)
+
     project = m.by_type("IfcProject")
     project_name = project[0].Name if project else None
 
@@ -1964,6 +2076,25 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         for pf in pipe_fittings:
             pf.pop("_centroid", None)
 
+        # Port topology attribution: which network each pipe/fitting belongs to,
+        # and which IFC system names it (real exports group pipes by system).
+        for e, pd in zip(pipe_elems, pipes):
+            gid = e.GlobalId
+            if gid in gid_network:
+                pd["network_id"] = gid_network[gid]
+            if gid in gid_system:
+                pd["system"] = gid_system[gid]
+                # system membership is a strong pipe_type signal (only when
+                # classification found nothing — don't override a named type)
+                if pd.get("pipe_type") in (None, "unknown"):
+                    pd["pipe_type"] = _classify_system_pipe_type(gid_system[gid])
+        for e, pf in zip(fitting_elems, pipe_fittings):
+            gid = e.GlobalId
+            if gid in gid_network:
+                pf["network_id"] = gid_network[gid]
+            if gid in gid_system:
+                pf["system"] = gid_system[gid]
+
         # Ducts (storey-contained + z-fallback)
         duct_elems = [e for e in els if _is_duct_segment(e)]
         duct_elems += mep_duct_fallback.get(storey.GlobalId, [])
@@ -2097,6 +2228,11 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
             "profile_scale": profile_scale,
             "profile_scale_confident": profile_scale_confident,
             "profile_scale_diag": profile_scale_diag,
+        },
+        "pipe_topology": {
+            "networks": topology.get("networks", []),
+            "member_count": topology.get("member_count", 0),
+            "systems": sorted(system_map.keys()),
         },
         "floors": floors,
     }
