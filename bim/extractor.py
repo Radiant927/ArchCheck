@@ -1092,17 +1092,23 @@ def _detect_clashes_list(mep_els, solid_els, settings, margin=0.05):
     """Cross-discipline clash pre-check between two element lists.
 
     bbox overlap (depth > margin) produces candidates; each is then CONFIRMED
-    by point-in-mesh (any MEP vertex strictly inside the solid).
+    by point-in-mesh (any MEP vertex strictly inside the solid). Each element's
+    world bbox is tessellated once and cached, so runtime is O(n_mep + n_solid)
+    geometry calls rather than O(n_mep × n_solid).
     Returns [{mep, vs, type, depth, confirmed}]."""
+    solids = []
+    for b in solid_els:
+        bb = _elem_world_bbox(b, settings)
+        if bb:
+            solids.append((b, bb))
+    if not solids or not mep_els:
+        return []
     out = []
     for a in mep_els:
         ba = _elem_world_bbox(a, settings)
         if not ba:
             continue
-        for b in solid_els:
-            bb = _elem_world_bbox(b, settings)
-            if not bb:
-                continue
+        for b, bb in solids:
             ox = min(ba[2], bb[2]) - max(ba[0], bb[0])
             oy = min(ba[3], bb[3]) - max(ba[1], bb[1])
             oz = min(ba[5], bb[5]) - max(ba[4], bb[4])
