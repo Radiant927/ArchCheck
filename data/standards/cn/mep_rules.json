@@ -112,7 +112,9 @@
     "scope": "pipe",
     "field": "pipe_type",
     "operator": "not_in",
-    "threshold": ["unknown"],
+    "threshold": [
+      "unknown"
+    ],
     "severity": "Medium",
     "code_ref": "GB 55037",
     "message": "管道 {room_name} 无法识别系统类型（unknown），需核对管道属性。"
@@ -145,5 +147,47 @@
     "severity": "Medium",
     "code_ref": "GB 50015",
     "message": "排水立管管径 {value}m 小于最小管径 {threshold}m。"
+  },
+  {
+    "id": "MEP-011",
+    "name": "通用水管最小管径检查（废数据红线）",
+    "description": "任何管道直径不应小于 10mm；更细的多为未拉伸几何/默认极细管等建模废数据。不区分系统，对所有管道生效。",
+    "scope": "pipe",
+    "field": "diameter_m",
+    "operator": ">=",
+    "threshold": 0.01,
+    "unit": "m",
+    "severity": "High",
+    "code_ref": "GB 55037",
+    "message": "管道 {room_name} 直径 {value}m 小于最小可接受值 {threshold}m（10mm），疑为建模废数据（未拉伸线/默认极细管），请核实该管是否为真实管道。"
+  },
+  {
+    "id": "MEP-012",
+    "name": "通用水管明显反坡检查",
+    "description": "任何管道坡度不应明显为负（< -0.005）。加压管允许 0 坡，但反坡在物理上错误（倒流/积水），多为建模方向错。",
+    "scope": "pipe",
+    "field": "slope",
+    "operator": ">=",
+    "threshold": -0.005,
+    "unit": "-",
+    "severity": "High",
+    "code_ref": "GB 55037",
+    "message": "管道 {room_name} 坡度 {value} 明显反坡（低于 {threshold}），重力方向错误会导致倒流/积水，请检查建模方向。"
+  },
+  {
+    "id": "MEP-013",
+    "name": "通用水管无坡度/水平提示",
+    "description": "未知系统的水平管道（坡度 -0.005~0.005）可能是正常的加压管，也可能是缺坡度的重力排水管。加压管允许，重力管必须带坡，故仅作提示请人工确认。",
+    "scope": "pipe",
+    "field": "slope",
+    "operator": ">=",
+    "threshold": 0.005,
+    "unit": "-",
+    "severity": "Low",
+    "code_ref": "GB 55037",
+    "message": "管道 {room_name} 坡度 {value} 接近水平（合格下限 {threshold}）。若为重力排水管须保证坡度，请人工确认是否为加压管。",
+    "condition_field": "slope",
+    "condition_operator": ">",
+    "condition_threshold": -0.005
   }
 ]

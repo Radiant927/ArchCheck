@@ -112,7 +112,9 @@
     "scope": "pipe",
     "field": "pipe_type",
     "operator": "not_in",
-    "threshold": ["unknown"],
+    "threshold": [
+      "unknown"
+    ],
     "severity": "Medium",
     "code_ref": "Fire Code 2023",
     "message": "Pipe {room_name} system type could not be classified (unknown); review pipe attributes."
@@ -145,5 +147,47 @@
     "severity": "Medium",
     "code_ref": "PUB CoP on Sewerage & Sanitary Works",
     "message": "Drainage stack diameter {value}m is below minimum {threshold}m."
+  },
+  {
+    "id": "MEP-011",
+    "name": "Generic pipe min diameter (debris red-line)",
+    "description": "No pipe shall be below 10mm diameter; anything thinner is usually un-extruded geometry or a default micro-pipe. Applies to all pipes regardless of system.",
+    "scope": "pipe",
+    "field": "diameter_m",
+    "operator": ">=",
+    "threshold": 0.01,
+    "unit": "m",
+    "severity": "High",
+    "code_ref": "Fire Code 2023",
+    "message": "Pipe {room_name} diameter {value}m is below the minimum acceptable {threshold}m (10mm); likely modelling debris (un-extruded line / default micro-pipe). Verify this is a real pipe."
+  },
+  {
+    "id": "MEP-012",
+    "name": "Generic pipe reversed-slope check",
+    "description": "No pipe shall have a clearly negative slope (< -0.005). Pressurised pipes may be flat, but a reversed slope is physically wrong (backflow/ponding), usually a modelling error.",
+    "scope": "pipe",
+    "field": "slope",
+    "operator": ">=",
+    "threshold": -0.005,
+    "unit": "-",
+    "severity": "High",
+    "code_ref": "Fire Code 2023",
+    "message": "Pipe {room_name} slope {value} is clearly reversed (below {threshold}); gravity-flow pipes sloping backwards cause backflow/ponding. Check the modelling direction."
+  },
+  {
+    "id": "MEP-013",
+    "name": "Generic pipe flat/no-slope prompt",
+    "description": "A flat pipe (slope -0.005 to 0.005) of unknown system may be a normal pressurised pipe or a gravity drainage pipe missing its fall. Prompt for manual confirmation.",
+    "scope": "pipe",
+    "field": "slope",
+    "operator": ">=",
+    "threshold": 0.005,
+    "unit": "-",
+    "severity": "Low",
+    "code_ref": "Fire Code 2023",
+    "message": "Pipe {room_name} slope {value} is near-horizontal (acceptable floor {threshold}). If it is a gravity drainage pipe, fall is required — please confirm it is a pressurised pipe.",
+    "condition_field": "slope",
+    "condition_operator": ">",
+    "condition_threshold": -0.005
   }
 ]
