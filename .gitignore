@@ -39,6 +39,7 @@ output/*.ifc
 output/*.jpg
 output/*.csv
 output/*.bcf
+output/benchmark/
 
 # Local run logs
 .tmp_streamlit.log
