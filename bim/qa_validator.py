@@ -125,6 +125,65 @@ def _check_boundaries(m, checks):
                        "uses the exact-boundary path."))
 
 
+def _safe_count(m, type_name):
+    """by_type count that tolerates entity types absent from the schema
+    (e.g. IfcPipeSegment doesn't exist in IFC2X3)."""
+    try:
+        return len(m.by_type(type_name))
+    except Exception:
+        return 0
+
+
+# Entity base types the extractor (bim/extractor.parse_model) consumes, matched
+# by subtype (a StandardCase or IFC2X3 generic element is_a its IFC4 base).
+_HANDLED_BASE_TYPES = [
+    # building / structure — counted into structure{} + structural_elements
+    "IfcWall", "IfcDoor", "IfcWindow", "IfcSlab", "IfcColumn", "IfcBeam",
+    "IfcStair", "IfcRamp", "IfcRampFlight",
+    # pipes / ducts / fittings — consumed as pipes[] / ducts[] / pipe_fittings[]
+    # (IfcFlowSegment covers pipes + ducts in both schemas; IfcFlowFitting
+    #  covers pipe/duct fittings in both schemas)
+    "IfcFlowSegment", "IfcFlowFitting",
+    # electrical — consumed as electrical_elements[]
+    "IfcElectricAppliance", "IfcLightFixture", "IfcElectricDistributionBoard",
+    "IfcFlowTerminal", "IfcFlowController",
+]
+
+
+def _is_handled(e):
+    """True if the extractor consumes this element in some form."""
+    return any(e.is_a(t) for t in _HANDLED_BASE_TYPES)
+
+
+def _check_entity_coverage(m, checks):
+    """Report physical element types present in the model that the extractor
+    does NOT consume — the gap between "what the file has" and "what we parse".
+
+    Reported as ``info`` (never lowers the health score — extra element types
+    are normal model content, not a defect); the machine-readable breakdown
+    lives in stats['entity_coverage'].
+    """
+    handled = {}
+    unhandled = {}
+    for e in m.by_type("IfcElement"):
+        t = e.is_a()
+        if _is_handled(e):
+            handled[t] = handled.get(t, 0) + 1
+        else:
+            unhandled[t] = unhandled.get(t, 0) + 1
+    if unhandled:
+        items = sorted(unhandled.items(), key=lambda kv: -kv[1])
+        total = sum(c for _, c in items)
+        names = "、".join(f"{t}×{c}" for t, c in items[:5])
+        more = f" 等 {len(items)} 类" if len(items) > 5 else ""
+        msg = (f"模型含 {total} 个未识别构件（{names}{more}）。提取器未消费这些类型，"
+               "相关规则可能无法判定；如需支持请扩展 bim/extractor。")
+        msg_en = (f"Model has {total} unrecognised elements ({names}{more}). The "
+                  "extractor does not consume these types, so related checks may not run.")
+        checks.append(("coverage", "info", msg, msg_en))
+    return {"handled": handled, "unhandled": unhandled}
+
+
 def validate_model(m, struct):
     """Return a usability report: {score, fatal, checks, stats}.
 
@@ -136,9 +195,11 @@ def validate_model(m, struct):
     _check_spaces(m, struct, checks)
     _check_geometry(m, checks)
     _check_boundaries(m, checks)
+    entity_coverage = _check_entity_coverage(m, checks)
 
+    # Only error / warn deduct from the health score; info notes never do.
     score = 100 - sum(_ERROR_PENALTY if lvl == "error" else _WARN_PENALTY
-                      for _, lvl, _, _ in checks if lvl != "ok")
+                      for _, lvl, _, _ in checks if lvl in ("error", "warn"))
     score = max(0, min(100, score))
     report = {
         "score": score,
@@ -146,11 +207,16 @@ def validate_model(m, struct):
         "checks": [{"id": cid, "level": lvl, "message": msg, "message_en": msg_en}
                    for cid, lvl, msg, msg_en in checks],
         "stats": {
-            "storeys": len(m.by_type("IfcBuildingStorey")),
-            "spaces": len(m.by_type("IfcSpace")),
-            "doors": len(m.by_type("IfcDoor")),
-            "windows": len(m.by_type("IfcWindow")),
-            "walls": len(m.by_type("IfcWall")) + len(m.by_type("IfcWallStandardCase")),
+            "storeys": _safe_count(m, "IfcBuildingStorey"),
+            "spaces": _safe_count(m, "IfcSpace"),
+            "doors": _safe_count(m, "IfcDoor"),
+            "windows": _safe_count(m, "IfcWindow"),
+            "walls": _safe_count(m, "IfcWall") + _safe_count(m, "IfcWallStandardCase"),
+            "pipes": _safe_count(m, "IfcPipeSegment") or _safe_count(m, "IfcFlowSegment"),
+            "pipe_fittings": _safe_count(m, "IfcPipeFitting"),
+            "ducts": _safe_count(m, "IfcDuctSegment"),
+            "elements": sum(1 for e in m.by_type("IfcElement")),
         },
+        "entity_coverage": entity_coverage,
     }
     return report
