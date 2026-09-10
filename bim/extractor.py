@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 
 import networkx as nx
+import numpy as np
 
 try:
     import ifcopenshell
@@ -301,6 +302,8 @@ def _plan_element_kind(e):
         return "pipe"
     if t == "IfcDuctSegment":
         return "duct"
+    if t == "IfcRailing":
+        return "railing"
     return None
 
 
@@ -435,13 +438,16 @@ _PIPE_TYPE_RULES = [
               "消防", "喷淋", "消火栓")),
     ("drainage", ("sanitary", "soil", "waste", "storm", "drain", "afvoer",
                   "riool", "hemelwater", "hwa", "regenwater", "lab waste",
-                  "condensate", "排水", "废水", "污", "雨水", "冷凝", "实验室废水")),
+                  "condensate", "sewer", "sewage", "asw",
+                  "排水", "废水", "污", "雨水", "冷凝", "实验室废水", "污水")),
     ("supply", ("domestic", "cold water", "water supply", "waterleiding",
                 "drinkwater", "domestic hot water", "hot water",
-                "给水", "供水", "生活热水", "热水")),
+                "pwc", "pwh", "circulation",
+                "给水", "供水", "生活热水", "热水", "循环")),
     ("hydronic", ("hydronic", "chilled", "heating", "cooling", "cv",
                   "verwarming", "chilled water",
-                  "暖通", "冷冻", "空调水")),
+                  "heat flow", "heat return", "hhf", "hhr", "kvk", "frk",
+                  "暖通", "冷冻", "空调水", "采暖", "供热")),
     ("gas", ("gas", "燃气", "天然气")),
     ("lab_gas", ("compressed air", "vacuum", "nitrogen", "oxygen", "argon",
                  "lab gas", "cda", "n2", "o2", "co2",
@@ -565,11 +571,14 @@ def _classify_system_pipe_type(system_name):
     if any(k in tokens for k in ("fireprotection", "fire")) or text == "fire":
         return "fire"
     if any(k in text for k in ("drainage", "wastewater", "sewage", "stormwater",
-                                "rainwater", "disposal")):
+                                "rainwater", "disposal", "sewer")):
         return "drainage"
-    if any(k in text for k in ("watersupply", "coldwater", "hotwater", "domestic")):
+    if any(k in text for k in ("watersupply", "coldwater", "hotwater", "domestic",
+                                "circulation")):
         return "supply"
-    if any(k in text for k in ("chilledwater", "condenserwater", "heating", "refrigeration")):
+    if any(k in text for k in ("chilledwater", "condenserwater", "heating",
+                                "refrigeration", "heatflow", "heatreturn",
+                                "coolingflow", "coolingreturn")):
         return "hydronic"
     if text == "gas" or "gas" in text:
         return "gas"
@@ -602,18 +611,141 @@ def _pipe_profile_diameter(e, declared_scale):
     of the model's *declared* length unit (profile dims use declared units,
     not world-coordinate units — they can differ in mixed-unit models).
     """
+    info = _extrusion_profile_info(e, declared_scale)
+    if info and info.get("is_circular"):
+        return info["section_min_m"] * 2 if info.get("radius") else info["section_min_m"]
+    return None
+
+
+def _extrusion_profile_info(e, scale):
+    """Best-effort section + length info from an element's extrusion geometry.
+
+    Works for any element that has an IfcExtrudedAreaSolid body representation
+    (beams, columns, slabs, footings, pipes, ducts, …). Slanted / rotated
+    extrusions still give the correct cross-section dimensions because the
+    SweptArea is defined in its own 2D plane. Mapped representations
+    (IfcMappedItem) are dereferenced so repeated elements (e.g. rafters) also
+    resolve correctly.
+
+    Returns dict with keys:
+      section_min_m / section_max_m — bounding dimensions of the 2D profile (m)
+      length_m                     — extrusion depth, i.e. length along axis (m)
+      is_circular                  — True if profile is a circle
+      radius                       — circle radius (m), if circular
+    Returns None if no extrusion found.
+    """
+    def _resolve_items(items):
+        """Yield geometric representation items, descending into MappedItems."""
+        for item in items or []:
+            if item.is_a("IfcMappedItem"):
+                # 解引用映射项：进到映射源的几何里找
+                mrep = getattr(item, "MappingSource", None)
+                if mrep and hasattr(mrep, "MappedRepresentation"):
+                    mapped = mrep.MappedRepresentation
+                    if mapped and hasattr(mapped, "Items"):
+                        for sub in _resolve_items(mapped.Items):
+                            yield sub
+            else:
+                yield item
+
+    def _from_extrusion(item):
+        """从一个 IfcExtrudedAreaSolid 提取截面 + 深度。"""
+        if not item.is_a("IfcExtrudedAreaSolid"):
+            return None
+        sa = item.SweptArea
+        depth = getattr(item, "Depth", None)
+        if depth is None or depth <= 0:
+            return None
+        sec_min = sec_max = None
+        is_circular = False
+        radius = None
+        if sa.is_a("IfcCircleProfileDef") or sa.is_a("IfcCircleHollowProfileDef"):
+            r = getattr(sa, "Radius", 0)
+            if r > 0:
+                sec_min = sec_max = 2 * r
+                is_circular = True
+                radius = r
+        elif sa.is_a("IfcRectangleProfileDef"):
+            xd = getattr(sa, "XDim", 0)
+            yd = getattr(sa, "YDim", 0)
+            if xd > 0 and yd > 0:
+                sec_min, sec_max = sorted((xd, yd))
+        elif sa.is_a("IfcArbitraryClosedProfileDef"):
+            curve = getattr(sa, "OuterCurve", None)
+            if curve and hasattr(curve, "Points"):
+                pts = curve.Points
+                xs = [p.Coordinates[0] for p in pts]
+                ys = [p.Coordinates[1] for p in pts]
+                dx = max(xs) - min(xs)
+                dy = max(ys) - min(ys)
+                if dx > 0 and dy > 0:
+                    sec_min, sec_max = sorted((dx, dy))
+        if sec_min is None or sec_max is None:
+            return None
+        return {
+            "section_min_m": sec_min * scale,
+            "section_max_m": sec_max * scale,
+            "length_m": depth * scale,
+            "is_circular": is_circular,
+            "radius_m": radius * scale if radius else None,
+        }
+
     if not e.Representation:
         return None
     for rep in e.Representation.Representations or []:
-        for item in rep.Items or []:
-            if not item.is_a("IfcExtrudedAreaSolid"):
-                continue
-            sa = item.SweptArea
-            if sa.is_a("IfcCircleProfileDef"):
-                return sa.Radius * 2.0 * declared_scale
-            if sa.is_a("IfcCircleHollowProfileDef"):
-                return sa.Radius * 2.0 * declared_scale
+        if rep.RepresentationIdentifier and rep.RepresentationIdentifier != "Body":
+            continue
+        for geom in _resolve_items(rep.Items):
+            result = _from_extrusion(geom)
+            if result:
+                return result
     return None
+
+
+def _pca_dims(elem, settings, scale):
+    """Long/short dimensions (m) of a prismatic element via PCA on its mesh.
+
+    For sloped or rotated elements (rafters, sloped beams, tilted columns)
+    whose geometry is a FacetedBrep / tessellation rather than an extrusion,
+    the axis-aligned bbox is wrong: its long axis is the *horizontal* extent,
+    not the element axis. PCA on the vertices finds the true element axis
+    (1st principal component) and the cross-section plane (2nd/3rd), so the
+    three projected ranges give a correct (length, height, width) estimate
+    regardless of orientation.
+
+    Returns (small, mid, big) in metres, or None.
+    """
+    try:
+        shape = ifcgeom.create_shape(settings, elem)
+        v = shape.geometry.verts
+        if len(v) < 6:
+            return None
+        pts = np.asarray(v, dtype=np.float64).reshape(-1, 3)
+        if len(pts) < 3:
+            return None
+        # 降采样控制成本：超过 10k 顶点时均匀抽取
+        if len(pts) > 10000:
+            step = max(1, len(pts) // 10000)
+            pts = pts[::step]
+        c = pts.mean(axis=0)
+        centered = pts - c
+        # 协方差矩阵的三个特征向量 = 三个主方向；特征值开根 ≈ 该方向标准差
+        cov = np.cov(centered.T)
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        # 按主方向从小到大排
+        order = np.argsort(eigvals)
+        ranges = []
+        for i in order:
+            axis = eigvecs[:, i]
+            proj = centered @ axis
+            ranges.append((proj.max() - proj.min()))
+        small, mid, big = sorted(ranges)
+        # 归一性保护：粗结果必须接近"细长杆件"才有意义，否则退回 None
+        if small > 1e-6 and mid > 1e-6:
+            return (small * scale, mid * scale, big * scale)
+        return None
+    except Exception:
+        return None
 
 
 def _try_best_scale(raw_value, ref_value, scale_a, scale_b, size_key, tol=0.3):
@@ -1264,51 +1396,131 @@ def _elem_volume(elem, settings, scale):
         return None
 
 
-def _structural_sections(els, settings, scale, col_cap=200, other_cap=30):
-    """Sample structural element data from storey elements.
+def _slab_thickness_m(e, scale, settings, profile_scale=None):
+    """Slab thickness in metres, best-effort by priority.
+
+    1. Qto_SlabBaseQuantities.GrossThickness  (if profile_scale known)
+    2. IfcExtrudedAreaSolid.Depth              (if profile_scale known)
+    3. PCA smallest principal axis              (world units — reliable even for
+       mixed-unit mm-declared models and sloped tessellated slabs)
+    4. bbox Z-axis difference                   (last-resort; wrong for sloped)
+
+    Qto / extrusion Depth use the model's declared length unit (e.g. mm when the
+    file declares MILLI but its geometry is metre-scaled), so they are only read
+    when ``profile_scale`` is known and multiplied by it. When unit inference is
+    not confident (``profile_scale is None``) they are skipped — multiplying by
+    the world scale would make mm-declared Revit slabs read ~1000x too thick.
+    Returns None if nothing works.
+    """
+    if profile_scale is not None:
+        # 1. Qto
+        qto = _qto_value(e, "Qto_SlabBaseQuantities", "GrossThickness")
+        if qto is not None and qto > 0:
+            return qto * profile_scale
+
+        # 2. Extrusion depth (Body representation)
+        if e.Representation:
+            for rep in e.Representation.Representations:
+                if rep.RepresentationIdentifier != "Body":
+                    continue
+                for item in rep.Items:
+                    if item.is_a("IfcExtrudedAreaSolid"):
+                        depth = getattr(item, "Depth", None)
+                        if depth and depth > 0:
+                            return depth * profile_scale
+
+    # 3. PCA smallest axis — slab is a flat panel, its thinnest direction is
+    #    the thickness regardless of how the slab is tilted in world space.
+    pca = _pca_dims(e, settings, scale)
+    if pca and pca[0] > 0.005:
+        return pca[0]
+
+    # 4. bbox fallback
+    d = _elem_bbox_dims(e, scale, settings)
+    if d and d[2] > 0.01:
+        return d[2]
+
+    return None
+
+
+def _structural_sections(els, settings, scale, profile_scale=None,
+                         col_cap=500, other_cap=500):
+    """Structural element data from storey elements.
 
     Returns (elements, column_sections, beam_sections, slab_thicknesses,
     unit_suspicious). ``elements`` is a per-element list (id/name/element_type +
-    section fields) that the review engine can judge; columns are sampled up to
-    col_cap while beams/slabs stay at other_cap to bound tessellation cost.
-    ``unit_suspicious`` counts column/beam/slab elements whose scaled dimensions
-    are implausibly small (< 0.02 m) — a sign of a unit-magnitude mismatch in
-    the source model — so they are not silently dropped.
+    section fields) for the review engine. Section dimensions are taken from
+    extrusion cross-section (IfcExtrudedAreaSolid.SweptArea) when available —
+    this stays correct for sloped/rotated beams, columns, etc. Bounding-box
+    dimensions are used as fallback. ``profile_scale`` is the unit scale for
+    SweptArea / Qto data (may differ from world scale in mixed-unit models).
+    ``unit_suspicious`` counts elements whose scaled dimensions are implausibly
+    small (< 0.02 m) — sign of a unit-magnitude mismatch.
     """
     elements, col_sec, beam_sec, slab_th = [], [], [], []
-    ncol = nbeam = nslab = 0
+    ncol = nbeam = nslab = nfooting = 0
     unit_suspicious = 0
     for e in els:
         if e.is_a("IfcColumn"):
             if ncol >= col_cap:
                 continue
             ncol += 1
+            info = _extrusion_profile_info(e, profile_scale) if profile_scale else None
             d = _elem_bbox_dims(e, scale, settings)
-            if d and min(d) < 0.02:
-                unit_suspicious += 1
-                continue
-            if d and 0.05 < min(d[:2]) and max(d[:2]) < 2.0:
-                w, dep = sorted((round(d[0], 3), round(d[1], 3)))
-                col_sec.append((w, dep))
+            sec_min = sec_max = height = None
+            if info:
+                sec_min = info["section_min_m"]
+                sec_max = info["section_max_m"]
+                height = info["length_m"]
+            else:
+                pca = _pca_dims(e, settings, scale)  # (small, mid, big)
+                if pca and 0.03 < pca[0] and pca[1] < 2.0:
+                    sec_min, sec_max, height = pca[0], pca[1], pca[2]
+                elif d and min(d) > 0.02:
+                    sec_min, sec_max = sorted((d[0], d[1]))
+                    height = d[2]
+                else:
+                    unit_suspicious += 1
+                    continue
+            if sec_min and sec_max and 0.05 < sec_min and sec_max < 2.0:
+                col_sec.append((round(sec_min, 3), round(sec_max, 3)))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
-                                 "element_type": "column", "section_min_m": w,
-                                 "section_max_m": dep,
+                                 "element_type": "column",
+                                 "section_min_m": round(sec_min, 3),
+                                 "section_max_m": round(sec_max, 3),
+                                 "height_m": round(height, 3) if height else None,
                                  "volume_m3": _elem_volume(e, settings, scale),
                                  "material": _elem_material(e)})
         elif e.is_a("IfcBeam"):
             if nbeam >= other_cap:
                 continue
             nbeam += 1
+            info = _extrusion_profile_info(e, profile_scale) if profile_scale else None
             d = _elem_bbox_dims(e, scale, settings)
-            if d and min(d) < 0.02:
-                unit_suspicious += 1
-                continue
-            if d and 0.05 < d[2] < 2.0:
-                beam_sec.append((round(d[2], 3), round(min(d[:2]), 3)))
+            sec_min = sec_max = span = None
+            if info:
+                sec_min = info["section_min_m"]
+                sec_max = info["section_max_m"]
+                span = info["length_m"]  # 拉伸深度 = 梁的真实长度（斜梁也对）
+            else:
+                pca = _pca_dims(e, settings, scale)  # (small, mid, big)，斜梁也对
+                if pca and 0.03 < pca[0] and pca[1] < 2.0:
+                    sec_min, sec_max, span = pca[0], pca[1], pca[2]
+                elif d and min(d) > 0.02:
+                    # bbox 兜底：假设梁是水平的
+                    sec_min = min(d[0], d[1])
+                    sec_max = d[2]
+                    span = max(d[0], d[1])
+                else:
+                    unit_suspicious += 1
+                    continue
+            if sec_min and sec_max and 0.03 < sec_min and sec_max < 2.0:
+                beam_sec.append((round(sec_max, 3), round(sec_min, 3)))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
-                                 "element_type": "beam", "depth_m": round(d[2], 3),
-                                 "width_m": round(min(d[:2]), 3),
-                                 "span_m": round(max(d[0], d[1]), 3),
+                                 "element_type": "beam",
+                                 "depth_m": round(sec_max, 3),
+                                 "width_m": round(sec_min, 3),
+                                 "span_m": round(span, 3) if span else None,
                                  "volume_m3": _elem_volume(e, settings, scale),
                                  "material": _elem_material(e)})
         elif e.is_a("IfcSlab"):
@@ -1316,14 +1528,47 @@ def _structural_sections(els, settings, scale, col_cap=200, other_cap=30):
                 continue
             nslab += 1
             d = _elem_bbox_dims(e, scale, settings)
-            if d and min(d) < 0.02:
+            thickness = _slab_thickness_m(e, scale, settings, profile_scale)
+            if thickness is None or thickness < 0.01:
                 unit_suspicious += 1
                 continue
-            if d and 0.02 < d[2] < 1.0:
-                slab_th.append(round(d[2], 3))
+            if 0.02 < thickness < 1.0:
+                slab_th.append(round(thickness, 3))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
-                                 "element_type": "slab", "thickness_m": round(d[2], 3),
-                                 "span_m": round(max(d[0], d[1]), 3),
+                                 "element_type": "slab",
+                                 "thickness_m": round(thickness, 3),
+                                 "span_m": round(max(d[0], d[1]), 3) if d else None,
+                                 "volume_m3": _elem_volume(e, settings, scale),
+                                 "material": _elem_material(e)})
+        elif e.is_a("IfcFooting"):
+            if nfooting >= other_cap:
+                continue
+            nfooting += 1
+            info = _extrusion_profile_info(e, profile_scale) if profile_scale else None
+            d = _elem_bbox_dims(e, scale, settings)
+            thickness = span = None
+            if info:
+                # 基础通常是短粗的拉伸体，厚度 = 拉伸方向长度
+                thickness = info["section_min_m"]
+                span = info["section_max_m"]
+            else:
+                # 用 PCA 截面：承台(0.84×0.84×0.3)与桩(0.3×0.3×6m)都取
+                # 截面短边为"厚度"，长边为跨度 —— 避免把 6m 长的桩按 bbox z
+                # 当厚度而超过过滤范围被丢弃。
+                pca = _pca_dims(e, settings, scale)
+                if pca and 0.02 < pca[0] < 3.0:
+                    thickness, span = pca[0], pca[2]
+                elif d and d[2] > 0.02:
+                    thickness = d[2]
+                    span = max(d[0], d[1])
+                else:
+                    unit_suspicious += 1
+                    continue
+            if thickness and 0.05 < thickness < 3.0:
+                elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
+                                 "element_type": "footing",
+                                 "thickness_m": round(thickness, 3),
+                                 "span_m": round(span, 3) if span else None,
                                  "volume_m3": _elem_volume(e, settings, scale),
                                  "material": _elem_material(e)})
     return elements, sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th)), unit_suspicious
@@ -1692,17 +1937,37 @@ def _classify_room_type(name):
     whose function is not indicated in the model (honest data policy).
     """
     n = (name or "").lower()
-    if any(k in n for k in ("stair", "楼梯", "梯")):
+    if any(k in n for k in (
+        "stair", "楼梯", "梯",
+        "treppe", "trepp", "stg",  # 德语/北欧
+    )):
         return "Stairwell"
-    if any(k in n for k in ("corr", "走廊", "廊", "lobby", "foyer", "vestib", "hall", "前室")):
+    if any(k in n for k in (
+        "corr", "走廊", "廊", "lobby", "foyer", "vestib", "hall", "前室",
+        "korridor", "gang", "flur", "durchgang",  # 德语
+    )):
         return "Corridor"
-    if any(k in n for k in ("meet", "会议", "training", "培训", "class", "教室", "auditor", "多功能")):
+    if any(k in n for k in (
+        "meet", "会议", "training", "培训", "class", "教室", "auditor", "多功能",
+        "besprech", "sitzung", "konferenz", "meeting",  # 德语
+    )):
         return "Meeting Room"
-    if any(k in n for k in ("electr", "mep", "配电", "设备", "mech", "plant", "机房", "lift", "elev")):
+    if any(k in n for k in (
+        "electr", "mep", "配电", "设备", "mech", "plant", "机房", "lift", "elev",
+        "techn", "gerät", "maschinen", "hausanschluss", "schacht",  # 德语
+        "el.", "lift", "aufzug",  # 德语电梯/电气
+    )):
         return "Equipment Room"
-    if any(k in n for k in ("wc", "toilet", "洗手", "厕所")):
+    if any(k in n for k in (
+        "wc", "toilet", "洗手", "厕所",
+        "bad", "dusche", "sanitär", "klos", "toilette",  # 德语
+        "rwc",  # 北欧 restroom with closet
+    )):
         return "Vestibule"
-    if any(k in n for k in ("office", "办公")):
+    if any(k in n for k in (
+        "office", "办公",
+        "büro", "buro", "kontor", "kont.", "arbeitsplatz",  # 德语/北欧
+    )):
         return "Office"
     return "Unknown"
 
@@ -1768,7 +2033,8 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
     proxy (None when the floor has no fire pipe to assess against).
     """
     name = space.Name or "?"
-    rtype = _classify_room_type(f"{ref} {name}")
+    long_name = getattr(space, "LongName", None) or ""
+    rtype = _classify_room_type(f"{ref} {name} {long_name}")
     if door_widths is None:
         exit_count = None
         door_width = None
@@ -1784,6 +2050,14 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
     circuit = _pset_value(space, "ArchCheckEEEParams", "circuit_load_a")
     outlet = _pset_value(space, "ArchCheckEEEParams", "outlet_spacing_m")
     eee_src = "model" if (light is not None or water is not None) else "default"
+    # corridor clear width: bbox short side for Corridor-type rooms
+    # (approximation — good enough for accessibility code-of-thumb checks)
+    corridor_width = None
+    if rtype == "Corridor" and hull and len(hull) >= 3:
+        xs = [p[0] for p in hull]
+        ys = [p[1] for p in hull]
+        corridor_width = round(min(max(xs) - min(xs), max(ys) - min(ys)), 3)
+
     return {
         "id": space.GlobalId or name,
         "name": name,
@@ -1798,6 +2072,7 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
         "outlet_spacing_m": float(outlet) if outlet is not None else 5.0,
         "eee_src": eee_src,
         "corridor_length_m": travel_distance or 0,
+        "accessible_corridor_width_m": corridor_width,
         "max_room_travel_dist_m": max_room_travel,
         "has_sprinkler": has_sprinkler,
         "hull": hull,
@@ -1932,6 +2207,28 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                     idx = i
             structural_fallback.setdefault(storeys[idx].GlobalId, []).append(e)
 
+    # Wall/Door/Window fallback: same containment reality — some exporters put
+    # walls/doors/windows under the building/site (or none) instead of a storey.
+    # Assign uncontained ones to a storey by world z-centre. NOTE: by_type
+    # ("IfcWall") already includes IfcWallStandardCase, so de-dup by GlobalId.
+    wall_door_window_fallback = {}
+    if storeys:
+        _wdw_seen = set()
+        for e in (list(m.by_type("IfcWall")) + list(m.by_type("IfcWallStandardCase"))
+                  + list(m.by_type("IfcDoor")) + list(m.by_type("IfcWindow"))):
+            if e.GlobalId in kept_els_gids or e.GlobalId in _wdw_seen:
+                continue
+            _wdw_seen.add(e.GlobalId)
+            b = _elem_world_bbox(e, geom_settings)
+            if not b:
+                continue
+            zc = (b[4] + b[5]) / 2
+            idx = 0
+            for i, ev in enumerate(elevs):
+                if zc >= ev:
+                    idx = i
+            wall_door_window_fallback.setdefault(storeys[idx].GlobalId, []).append(e)
+
     # Electrical fallback: same containment reality — lights/panels/terminals are
     # often under the building/site, not a storey. Assign uncontained electrical
     # elements to a storey by their world z-centre.
@@ -2030,17 +2327,22 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
     travel = _compute_travel_distances(space_geom, door_room, door_geom, scale)
 
     # Only extract per-element footprint geometry for affordable models (the
-    # plan/3D detail render); huge models skip it to keep parsing fast.
-    total_phys = sum(len(v) for v in by_storey.values())
+    # plan/3D detail render); huge models skip it to keep parsing fast. Count
+    # only elements the plan actually draws (_plan_element_kind) — otherwise
+    # heavy Annotation / Furnishing / Space containers wrongly trip the gate
+    # (e.g. Institute-Building: 809 total but only 442 plan-worthy).
+    total_phys = sum(1 for els in by_storey.values()
+                     for e in els if _plan_element_kind(e))
     extract_plan = total_phys <= 600
 
     floors = []
     for storey in storeys:
         els = by_storey.get(storey.GlobalId, [])
+        wdw_fb = wall_door_window_fallback.get(storey.GlobalId, [])
         types = {}
         storey_door_widths = []
         ramp_slopes = []
-        for e in els:
+        for e in els + wdw_fb:
             types[e.is_a()] = types.get(e.is_a(), 0) + 1
             if e.is_a("IfcDoor"):
                 w = door_meta.get(e.GlobalId)
@@ -2053,9 +2355,9 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         # Structural elements (with z-fallback for uncontained columns/beams/slabs)
         all_struct_els = els + structural_fallback.get(storey.GlobalId, [])
         elements, col_sec, beam_sec, slab_th, unit_suspicious = _structural_sections(
-            all_struct_els, geom_settings, scale)
+            all_struct_els, geom_settings, scale, profile_scale_for_extract)
 
-        plan_elems = _plan_elements(els, geom_settings) if extract_plan else []
+        plan_elems = _plan_elements(els + wdw_fb, geom_settings) if extract_plan else []
 
         # Pipes (storey-contained + z-fallback)
         pipe_elems = [e for e in els if _is_pipe_segment(e) and not _is_duct_segment(e)]
@@ -2105,6 +2407,20 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         duct_elems = [e for e in els if _is_duct_segment(e)]
         duct_elems += mep_duct_fallback.get(storey.GlobalId, [])
         ducts = [_duct_data(e, scale, geom_settings, profile_scale_for_extract) for e in duct_elems]
+
+        # Railings — count + approximate height from bbox
+        railing_elems = [e for e in els if e.is_a("IfcRailing")]
+        railing_heights = []
+        for re in railing_elems:
+            b = _elem_world_bbox(re, geom_settings)
+            if b:
+                h = b[5] - b[4]  # z1 - z0
+                if h > 0.01:
+                    railing_heights.append(round(h, 3))
+        railings = [{"name": e.Name or "",
+                     "railing_type": getattr(e, "PredefinedType", None) or "",
+                     "height_m": h}
+                    for e, h in zip(railing_elems, railing_heights)]
 
         # Clash detection: include all MEP + structural elements on this floor
         all_mep_els = pipe_elems + duct_elems + fitting_elems
@@ -2188,6 +2504,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "columns": types.get("IfcColumn", 0) + types.get("IfcColumnStandardCase", 0),
                 "beams": types.get("IfcBeam", 0),
                 "slabs": types.get("IfcSlab", 0) + types.get("IfcSlabStandardCase", 0),
+                "footings": types.get("IfcFooting", 0),
                 "pipe_fittings": n_pipe_fit,
                 "pipes": n_pipes,
                 "ducts": n_ducts,
@@ -2197,6 +2514,11 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "stairs": types.get("IfcStair", 0),
                 "ramps": types.get("IfcRamp", 0) + types.get("IfcRampFlight", 0),
                 "ramp_slopes": sorted(ramp_slopes),
+                "railings": len(railing_elems),
+                "railing_heights": sorted(railing_heights),
+                "sanitary_fixtures": types.get("IfcSanitaryTerminal", 0),
+                "air_terminals": types.get("IfcAirTerminal", 0),
+                "outlets": types.get("IfcOutlet", 0),
                 "door_widths_m": sorted(set(storey_door_widths)),
                 "door_count": len(storey_door_widths),
                 "unit_suspicious_struct": unit_suspicious,
@@ -2211,6 +2533,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
             "pipes": pipes,
             "pipe_fittings": pipe_fittings,
             "ducts": ducts,
+            "railings": railings,
             "electrical_equipment": equip,
             "electrical_elements": electrical,
         })
