@@ -51,12 +51,19 @@ def _by_type(m, type_name):
 
 def _declared_length_scale(m):
     """Meters per unit declared by the model's length unit (0.001 mm / 1.0 m),
-    or None if the model declares no length unit."""
+    or None if the model declares no length unit. Handles both SI units
+    (mm/m) and conversion-based units (imperial FOOT/INCH, e.g. Revit models
+    with 1.0 ft floor thickness)."""
     for ua in m.by_type("IfcUnitAssignment"):
         for u in ua.Units:
             if u.is_a("IfcSIUnit") and u.UnitType == "LENGTHUNIT":
                 return _PREFIX_SCALE.get(u.Prefix, 1.0)
-    return None
+    # Non-SI length unit (FOOT / INCH / ...): let ifcopenshell resolve the factor.
+    try:
+        import ifcopenshell.util.unit as _uu
+        return _uu.calculate_unit_scale(m)
+    except Exception:
+        return None
 
 
 def _length_scale(m):
@@ -2207,15 +2214,16 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                     idx = i
             structural_fallback.setdefault(storeys[idx].GlobalId, []).append(e)
 
-    # Wall/Door/Window fallback: same containment reality — some exporters put
-    # walls/doors/windows under the building/site (or none) instead of a storey.
+    # Wall/Door/Window/Railing/Stair fallback: same containment reality — some
+    # exporters put these under the building/site (or none) instead of a storey.
     # Assign uncontained ones to a storey by world z-centre. NOTE: by_type
     # ("IfcWall") already includes IfcWallStandardCase, so de-dup by GlobalId.
     wall_door_window_fallback = {}
     if storeys:
         _wdw_seen = set()
         for e in (list(m.by_type("IfcWall")) + list(m.by_type("IfcWallStandardCase"))
-                  + list(m.by_type("IfcDoor")) + list(m.by_type("IfcWindow"))):
+                  + list(m.by_type("IfcDoor")) + list(m.by_type("IfcWindow"))
+                  + list(m.by_type("IfcRailing")) + list(m.by_type("IfcStair"))):
             if e.GlobalId in kept_els_gids or e.GlobalId in _wdw_seen:
                 continue
             _wdw_seen.add(e.GlobalId)

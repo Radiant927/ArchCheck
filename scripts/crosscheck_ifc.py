@@ -149,13 +149,20 @@ def read_ifc_truth(ifc_path, world_scale=None):
     out = defaultdict(list)
 
     # 声明单位探测（仅在 world_scale 未提供时使用）
-    declared_scale = 1.0
+    declared_scale = None
     for u in m.by_type("IfcUnitAssignment"):
         for ue in u.Units:
             if ue.is_a("IfcSIUnit") and ue.UnitType == "LENGTHUNIT":
                 prefix = (ue.Prefix or "") if hasattr(ue, "Prefix") else ""
                 declared_scale = {"": 1.0, "MILLI": 0.001, "CENTI": 0.01,
                                   "KILO": 1000.0}.get(prefix, 1.0)
+    if declared_scale is None:
+        # 非 SI 长度单位（英制 FOOT/INCH 等）：交给 ifcopenshell 解析换算系数
+        try:
+            import ifcopenshell.util.unit as _uu
+            declared_scale = _uu.calculate_unit_scale(m)
+        except Exception:
+            declared_scale = 1.0
     if world_scale is None:
         world_scale = declared_scale
 

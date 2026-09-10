@@ -109,3 +109,19 @@
 - 代价：Institute 解析 ~2s→~14s（tessellate 442 件），仅"需平面图"的模型发生。
 
 **教训**：`total_phys` 这类"模型复杂度闸门"必须只数**功能相关的构件**，否则被 Annotation/Furnishing 这类"凑数"元素误触发，把该出的平面图关掉。
+
+## 七、追加：匹配器就近消歧 + 英制单位 + footing/栏杆/楼梯（2026-09-10）
+
+**1. 同名多实例错配（Jasmin/Institute）**：老 Archicad 重名严重（IfcWall-6 ×4）。crosscheck 匹配器原来取"第一个同名"，改按 `(名称匹配等级, 几何中心距离)` 排序选最近 —— **Institute 23✗ → 0✗**（它的 23 个字段 ✗ 也是重名错配）。
+
+**2. 英制单位（Building-4351）**：Revit 英制模型用 `IfcConversionBasedUnit`(FOOT)，`_declared_length_scale` 只认 `IfcSIUnit` → declared=1.0，Qto 板厚 1.0 ft 当米 → 卡在 `<1.0` 过滤线外丢弃。修：无 SIUnit 时用 `ifcopenshell.util.unit.calculate_unit_scale`。crosscheck 真值侧同步。
+
+**3. 结构构件缺口**：
+- footing 用 PCA 截面（承台 + 6m 钢桩都过）→ Basic footing **0→23/23**。
+- `wall_door_window_fallback` 扩到 **IfcRailing + IfcStair** → 4351 railing 漏 5→0、stair 计数 ✓、slab 5✗→0。
+
+**批量 v4 结果**：Institute **100%**、4351 **100%(1 边缘漏)**、Basic 99.6%、FZK/官方全套 100%。剩 Jasmin 77.9%（跨层墙 5m vs 按层 2.75 + 窗属性 vs bbox，属模型语义）、Basic 1 边缘 ✗（楼梯建模成 slab）。
+
+**benchmark 回归**：多数持平或升（FZK +2.1、wall-opening +1.7、Basic +1.0、HITOS +0.6）；4351 -2.5（英制修正后尺寸更准、个别规则不再触发，B 轴反升）、tessellation 参考样 -2.8（小样本）。
+
+**教训汇总（三个单位坑）**：①斜构件 bbox 失效；②Qto/Extrusion(声明单位) vs PCA/bbox(世界单位) 不可混用 scale；③单位检测要覆盖非 SI 单位（英制 FOOT/INCH）。
