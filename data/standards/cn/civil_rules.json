@@ -179,5 +179,20 @@
     "severity": "Medium",
     "code_ref": "GB 51309",
     "message": "{room_name} 疏散路径未设置疏散指示标志。"
+  },
+  {
+    "id": "CIVIL-015",
+    "name": "住宅主要房间最小使用面积检查",
+    "description": "住宅的起居室/卧室/厨房/餐厅使用面积不应小于基本要求（住宅房型由 AI 语义层归类后触发本规则）",
+    "scope": "room",
+    "field": "room_area_sqm",
+    "operator": ">=",
+    "threshold": 4.0,
+    "condition_field": "type",
+    "condition_operator": "in",
+    "condition_threshold": ["Living Room", "Bedroom", "Kitchen", "Dining Room"],
+    "severity": "Medium",
+    "code_ref": "GB 50096",
+    "message": "{room_name} 使用面积 {value}m² 小于住宅基本要求 {threshold}m²。"
   }
 ]

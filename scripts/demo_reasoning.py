@@ -11,6 +11,7 @@
   python scripts/demo_reasoning.py            # 默认 CN 标准 + Schependomlaan
   python scripts/demo_reasoning.py --std sg   # 新加坡标准
   python scripts/demo_reasoning.py --model FZK_Haus   # 换住宅样例
+  python scripts/demo_reasoning.py --model office_3f  # 办公楼：场景 5 显示消火栓间距真判定
 """
 import argparse
 import io
@@ -25,9 +26,6 @@ from bim.extractor import build_review_data
 from core import engine
 from kb import semantic
 
-# 演示场景：自然语言问题 -> 对应规则 -> 一句口头解释
-# 全部用 GB 55037（在免费知识库里，语义检索能命中真条文）。
-# 场景 4/5 故意选覆盖类规则，演示「空作用域未检查」和「缺字段未检查」两种诚实上报。
 SCENARIOS = [
     {
         "question": "公共建筑的疏散门净宽最小不能小于多少？",
@@ -52,9 +50,27 @@ SCENARIOS = [
     {
         "question": "室内消火栓的布置间距最大是多大？",
         "rule_id": "MEP-009",
-        "intro": "【场景 5】消火栓间距 —— 演示「规则在库但模型缺字段 → 未检查」",
+        "intro": "【场景 5】消火栓间距 —— 字段已激活；本模型无消防管 → 条件无匹配未检查",
     },
 ]
+
+# 8-27（旧版）同一模型 Schependomlaan 的判定输出，用于对比本周提取升级后的差异。
+BEFORE_OUTCOME = {
+    "CIVIL-004": "✗ 数据缺失（door_width_m 不在模型，无法判定）",
+    "CIVIL-001": "✓ 通过",
+    "CIVIL-003": "✗ 违规 2 处（6.03/4.03 面积>50㎡ 但关联失败出口=0）",
+    "EEE-001": "⚠ 未检查（无电气设备，空作用域）",
+    "MEP-009": "⚠ 未检查（缺 hydrant_spacing_m 字段）",
+}
+
+# 差异一句话归因（对应本周工作）。
+CHANGE_REASON = {
+    "CIVIL-004": "门-房间关联修复 → 门宽 32/100 → 98/100，规则首次可判定",
+    "CIVIL-001": "无变化",
+    "CIVIL-003": "旧违规是关联失败的假阳性（6.03/4.03 实际出口 5/6 个）",
+    "EEE-001": "无变化",
+    "MEP-009": "字段已激活；本模型无消防管，上报口径从缺字段变为条件无匹配",
+}
 
 
 def evidence_lines(question, top_k=2):
@@ -70,14 +86,15 @@ def evidence_lines(question, top_k=2):
     return out
 
 
-def rule_outcome(res, rule_id, title):
+def rule_outcome(res, rule_id, title, scope=None):
     """该规则在这份审查结果里的判定结果（违规/数据缺失/未检查/通过）。"""
     hits = [i for i in res["all_issues"] if i.get("rule_id") == rule_id]
-    # 先按 rule_id 匹配覆盖；再匹配"空作用域聚合"覆盖（按规则名出现在描述里）
+    # 先按 rule_id 匹配覆盖；再匹配"空作用域聚合"覆盖（精确 scope，或按规则名出现在描述里兜底）
     cov = [c for c in res["coverage_findings"] if c.get("rule_id") == rule_id]
     if not cov:
         cov = [c for c in res["coverage_findings"]
-               if c.get("rule_id", "").startswith("scope::") and title in c.get("description", "")]
+               if c.get("rule_id") == f"scope::{scope}"
+               or (c.get("rule_id", "").startswith("scope::") and title in c.get("description", ""))]
     if hits:
         lines = [f"  ✗ 违规 {len(hits)} 处（{title}）："]
         for h in hits[:3]:
@@ -88,6 +105,11 @@ def rule_outcome(res, rule_id, title):
         return "\n".join(lines)
     if cov:
         return f"  ⚠ 未检查：{cov[0]['description'][:90]}"
+    # 判定但全部通过 → 报已判定的元素数，避免与「条件无匹配静默跳过」混淆
+    t = res.get("rule_tally", {}).get(rule_id)
+    judged = t["judged"] if t else 0
+    if judged > 0:
+        return f"  ✓ 全部通过（已判定 {judged} 个元素，均合规）"
     return f"  ✓ 全部通过（{title} 无发现）"
 
 
@@ -111,6 +133,7 @@ def run_demo(std_id="cn", model_name="Schependomlaan"):
     print("演示链路：提问 → 语义检索 → 条文证据 → 规则判定 → 结果")
     print("=" * 72)
 
+    outcomes = {}
     for sc in SCENARIOS:
         print(f"\n{sc['intro']}")
         print(f"  ❓ 提问：{sc['question']}")
@@ -122,7 +145,23 @@ def run_demo(std_id="cn", model_name="Schependomlaan"):
             print(f"  ⚖ 命中规则：{rule['name']}（{rule.get('code_ref','')}）"
                   f"[阈值 {rule.get('threshold','-')} {rule.get('unit','')}]")
         print("  判定结果（在公寓模型上）：")
-        print(rule_outcome(res, sc["rule_id"], rule["name"] if rule else sc["rule_id"]))
+        oc = rule_outcome(res, sc["rule_id"], rule["name"] if rule else sc["rule_id"],
+                          rule.get("scope") if rule else None)
+        outcomes[sc["rule_id"]] = oc
+        print(oc)
+
+    # 本周提取升级 before/after 对比（8-27 基线只对 Schependomlaan 有意义）
+    if model_name == "Schependomlaan":
+        print("\n" + "=" * 72)
+        print("本周提取升级 before/after 对比（同一模型 Schependomlaan · 标准 CN）")
+        print("=" * 72)
+        for sc in SCENARIOS:
+            rid = sc["rule_id"]
+            after = outcomes[rid].split("\n")[0]
+            print(f"\n{sc['intro']}")
+            print(f"  · 8-27（旧）：{BEFORE_OUTCOME.get(rid, '—')}")
+            print(f"  · 现在（新）：{after}")
+            print(f"  · 变化原因：{CHANGE_REASON.get(rid, '—')}")
     return 0
 
 

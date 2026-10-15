@@ -15,54 +15,139 @@ env vars:
 """
 import json
 import os
+from pathlib import Path
 
 import requests
 
-BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:15721")
-API_KEY = os.environ.get("LLM_API_KEY", "PROXY_MANAGED")
-MODEL = os.environ.get("LLM_MODEL", "deepseek-v4-flash")
+# Local, git-ignored credentials file (llm/local_config.json):
+#   {"base_url": "https://api.deepseek.com", "api_key": "sk-...",
+#    "model": "deepseek-chat", "api_style": "openai"}
+# Environment variables always win over this file.
+_LOCAL_CONFIG = Path(__file__).resolve().parent / "local_config.json"
+_PROXY_URL = "http://127.0.0.1:15721"
+
+
+def _load_local_config():
+    try:
+        return json.loads(_LOCAL_CONFIG.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+_CFG = _load_local_config()
+
+
+def _cfg(name, env_key, default):
+    val = os.environ.get(env_key)
+    if val:
+        return val
+    return _CFG.get(name, default)
+
+
+BASE_URL = _cfg("base_url", "LLM_BASE_URL", _PROXY_URL)
+API_KEY = _cfg("api_key", "LLM_API_KEY", "PROXY_MANAGED")
+
+# API wire format: "anthropic" for the local Anthropic-compatible proxy
+# (/v1/messages), "openai" for a direct OpenAI-compatible endpoint such as
+# DeepSeek official (/chat/completions). Auto-detected from the base URL.
+DEFAULT_STYLE = "anthropic" if "15721" in BASE_URL else "openai"
+API_STYLE = _cfg("api_style", "LLM_API_STYLE", DEFAULT_STYLE)
+_DEFAULT_MODEL = "deepseek-v4-flash" if API_STYLE == "anthropic" else "deepseek-chat"
+MODEL = _cfg("model", "LLM_MODEL", _DEFAULT_MODEL)
 MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "1600"))
 
 
+def configured():
+    """Whether a usable backend is configured (a real key for direct APIs)."""
+    if API_STYLE == "openai":
+        return bool(API_KEY) and API_KEY != "PROXY_MANAGED"
+    return True  # local proxy manages its own credential
+
+
+def _request_openai(body, headers):
+    url = BASE_URL.rstrip("/")
+    if not url.endswith("/chat/completions"):
+        url = url + ("/v1/chat/completions" if "/v1" not in url else "/chat/completions")
+    return requests.post(url, json=body, headers=headers, timeout=120)
+
+
+def _parse_openai(data):
+    try:
+        msg = data["choices"][0]["message"]
+    except (KeyError, IndexError):
+        return ""
+    # deepseek-reasoner puts chain-of-thought in reasoning_content; the answer
+    # is content. Some servers return a list of content parts instead of a str.
+    content = msg.get("content", "")
+    if isinstance(content, list):
+        content = "".join(p.get("text", "") for p in content
+                          if isinstance(p, dict))
+    return (content or "").strip()
+
+
 def available():
-    """Whether the HTTP transport is importable."""
+    """Whether the HTTP transport is importable and credentials are present."""
     try:
         import requests  # noqa: F401
-        return True
     except ImportError:
         return False
+    return configured()
 
 
 def chat(system, user, model=None, max_tokens=None, retries=3):
     """Single chat completion. Returns the assistant text (thinking skipped).
 
+    Supports two wire formats selected by ``API_STYLE``:
+      * anthropic — local proxy at :15721 (/v1/messages)
+      * openai    — direct OpenAI-compatible API, e.g. DeepSeek official
+
     Reasoning models may spend the whole token budget on thinking and return no
-    text — so on an empty response (or a transient 502) we retry with a larger
-    budget.
+    text — so on an empty response (or a transient error) we retry with a larger
+    budget. Returns "" when the backend is unreachable / errors (callers treat
+    "" as "AI unavailable" and degrade gracefully).
     """
-    body = {"model": model or MODEL, "max_tokens": max_tokens or MAX_TOKENS,
-            "messages": [{"role": "user", "content": user}]}
+    messages = []
     if system:
-        body["system"] = system
-    headers = {"x-api-key": API_KEY, "anthropic-version": "2023-06-01"}
-    budget = body["max_tokens"]
+        if API_STYLE == "anthropic":
+            system_field = {"system": system}
+        else:
+            messages.append({"role": "system", "content": system})
+    else:
+        system_field = {}
+    messages.append({"role": "user", "content": user})
+
+    budget = max_tokens or MAX_TOKENS
     for attempt in range(retries):
         try:
-            resp = requests.post(f"{BASE_URL}/v1/messages", json=body,
-                                 headers=headers, timeout=120)
+            if API_STYLE == "openai":
+                body = {"model": model or MODEL, "max_tokens": budget,
+                        "messages": messages}
+                headers = {"Authorization": f"Bearer {API_KEY}",
+                           "Content-Type": "application/json"}
+                resp = _request_openai(body, headers)
+            else:
+                body = {"model": model or MODEL, "max_tokens": budget,
+                        "messages": [{"role": "user", "content": user}],
+                        **system_field}
+                headers = {"x-api-key": API_KEY, "anthropic-version": "2023-06-01"}
+                resp = requests.post(f"{BASE_URL.rstrip('/')}/v1/messages",
+                                     json=body, headers=headers, timeout=120)
+
             if resp.status_code != 200:
-                if resp.status_code == 502 and attempt < retries - 1:
+                # Transient / budget errors: grow budget and retry.
+                if resp.status_code in (429, 500, 502, 503) and attempt < retries - 1:
                     budget = min(budget * 2, 6000)
-                    body["max_tokens"] = budget
                     continue
                 return ""
             data = resp.json()
-            text = "".join(b.get("text", "") for b in data.get("content", [])
-                           if b.get("type") == "text").strip()
+            if API_STYLE == "openai":
+                text = _parse_openai(data)
+            else:
+                text = "".join(b.get("text", "") for b in data.get("content", [])
+                               if b.get("type") == "text").strip()
             if text:
                 return text
             budget = min(budget * 2, 6000)  # thinking ate the budget
-            body["max_tokens"] = budget
         except Exception:
             if attempt == retries - 1:
                 return ""

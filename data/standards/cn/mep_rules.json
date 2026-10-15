@@ -188,6 +188,21 @@
     "message": "管道 {room_name} 坡度 {value} 接近水平（合格下限 {threshold}）。若为重力排水管须保证坡度，请人工确认是否为加压管。",
     "condition_field": "slope",
     "condition_operator": ">",
-    "condition_threshold": -0.005
+    "condition_threshold": -0.005,
+    "conditions_all": [
+        {"field": "pipe_type", "operator": "in",
+         "threshold": ["unknown"]}
+    ]
+  },
+  {
+    "id": "MEP-PRED-001",
+    "kind": "predictive",
+    "name": "管道剩余寿命预测预警",
+    "description": "基于维保记录拟合 Cox 比例风险模型，给出检修周期内的失效概率；超阈值的管道预警，并输出按风险排序的检修清单。无维保数据时诚实弃权。",
+    "scope": "pipe",
+    "family": "steel_pipe",
+    "probability_window": "inspection_cycle",
+    "prob_threshold": 0.5,
+    "code_ref": "Cox-PH · 检修周期概率"
   }
 ]

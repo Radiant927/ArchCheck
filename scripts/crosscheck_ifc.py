@@ -111,18 +111,13 @@ def _length_thickness_height_from_bbox(bbox, kind):
 # -------------------- IFC 直读真值 --------------------
 
 def _ifc_bbox(elem):
-    """从 IfcBoundingBox 或 Body 几何算 bbox，统一 (x0,y0,x1,y1,z0,z1) 格式。
-    返回局部坐标下的 bbox，单位与模型一致。"""
-    # 优先用 IfcBoundingBox（快）
-    if elem.Representation:
-        for rep in elem.Representation.Representations:
-            if rep.RepresentationType == "BoundingBox":
-                for item in rep.Items:
-                    if item.is_a("IfcBoundingBox"):
-                        c = item.Corner.Coordinates
-                        dx, dy, dz = item.XDim, item.YDim, item.ZDim
-                        return (c[0], c[1], c[0]+dx, c[1]+dy, c[2], c[2]+dz)
-    # 退而求其次：用 ifcopenshell 几何工具（世界坐标，和提取侧 plan bbox 同一参照系）
+    """Body 几何 tessellation 的世界坐标 bbox，统一 (x0,y0,x1,y1,z0,z1)。
+
+    不用 IfcBoundingBox 快捷路径：BoundingBox 的 XDim 等是模型声明单位原值
+    （混合单位模型声明 mm、几何实际 m），既不带 placement 又与提取侧
+    plan bbox（tessellation 世界坐标）单位/参照系都不一致，会产生整批
+    1000× 假错误。离线互检宁可慢也要同口径。"""
+    # 用 ifcopenshell 几何工具（世界坐标，和提取侧 plan bbox 同一参照系）
     try:
         settings = ifcgeom.settings()
         # 必须输出世界坐标，否则空名构件靠几何中心匹配会失败（真值局部 vs 提取世界）
@@ -136,7 +131,7 @@ def _ifc_bbox(elem):
         return None
 
 
-def read_ifc_truth(ifc_path, world_scale=None):
+def read_ifc_truth(ifc_path, world_scale=None, structural_scope=False):
     """直读 IFC 真值：每个构件的 GlobalId / 类别 / 名称 / bbox（世界坐标，原单位）/ 属性。
     返回 dict: {category: [{global_id, name, bbox_local, props}]}
 
@@ -168,10 +163,32 @@ def read_ifc_truth(ifc_path, world_scale=None):
 
     for ifc_type, cat in TYPE_MAP.items():
         try:
-            elems = m.by_type(ifc_type)
+            if ifc_type == "IfcPipeSegment":
+                # 老 IFC2x3 模型（如 Duplex 2011）直接实例化父类 IfcFlowSegment，
+                # by_type("IfcPipeSegment") 查不到；提取器按 IfcFlowSegment 收，
+                # 真值侧也必须一致（排除风管段）。
+                elems = [e for e in m.by_type("IfcFlowSegment")
+                         if not e.is_a("IfcDuctSegment")]
+            elif ifc_type == "IfcPipeFitting":
+                elems = [e for e in m.by_type("IfcFlowFitting")
+                         if not e.is_a("IfcDuctFitting")]
+            else:
+                elems = m.by_type(ifc_type)
         except Exception:
             continue
         for elem in elems:
+            # 结构口径：把提取器有意跳过的"非结构件"从真值中一并剔除，避免把
+            # 吊顶/保温/防水（被导出为 IfcSlab）与匿名占位（IfcColumn）算成漏读。
+            # 判定与提取器 _NONSTRUCT_KEYS / 匿名柱规则一致（见方案 §1.3）。
+            if structural_scope and cat in ("slab", "column"):
+                _hay = f"{elem.Name or ''} {EX._elem_material(elem) or ''}".lower()
+                if any(k in _hay for k in EX._NONSTRUCT_KEYS):
+                    continue
+                if cat == "column" and not (
+                        (elem.Name or "").strip()
+                        or (getattr(elem, "ObjectType", "") or "").strip()
+                        or EX._elem_material(elem)):
+                    continue
             # 几何类需要 bbox（尺寸真值 + 中心匹配）；MEP 类走 id/计数/属性真值，
             # 逐件 tessellate 太慢（如 Revit-MEP 800+ 管）。
             bbox = None
@@ -192,15 +209,37 @@ def read_ifc_truth(ifc_path, world_scale=None):
                 t = _truth_slab_thickness(elem, world_scale, declared_scale)
                 if t is not None:
                     props["truth_thickness_m"] = t
+            # pipe 直径 & 长度（米）：从拉伸截面（IfcCircleProfileDef/IfcCircleHollowProfileDef）
+            # 取半径→直径，拉伸深度→长度。斜管/非拉伸几何体走 bbox 长度兜底。
+            elif cat == "pipe":
+                diam, length = _truth_pipe_diameter_length(elem, world_scale)
+                if diam is not None:
+                    props["truth_diameter_m"] = diam
+                if length is not None:
+                    props["truth_length_m"] = length
+                # 材质
+                for assoc in (elem.HasAssociations or []):
+                    if assoc.is_a("IfcRelAssociatesMaterial"):
+                        mat = assoc.RelatingMaterial
+                        if hasattr(mat, "Name") and mat.Name:
+                            props["truth_material"] = mat.Name
+                        break
+                # 系统归属（通过端口 → 系统）
+                sys_name = _truth_system_name(elem)
+                if sys_name:
+                    props["truth_system"] = sys_name
             # beam/column 真实棱柱尺寸（拉伸截面 → PCA → 兜底），斜杆件用 bbox 会错
             elif cat in ("beam", "column"):
-                info = EX._extrusion_profile_info(elem, 1.0)  # 模型单位
+                # 单位双轨：拉伸截面参数是声明单位（mm），用 declared_scale；
+                # PCA/tessellation 几何是实际世界单位（混合单位模型可能是 m），
+                # 用 world_scale。两条路都直接产出米，prism getter 不再乘 scale。
+                info = EX._extrusion_profile_info(elem, declared_scale)
                 prism = None
                 if info:
                     prism = (info["section_min_m"], info["section_max_m"],
                              info["length_m"])
                 else:
-                    pca = EX._pca_dims(elem, _GEOM_SETTINGS, 1.0)  # (small, mid, big)
+                    pca = EX._pca_dims(elem, _GEOM_SETTINGS, world_scale)
                     if pca:
                         prism = pca
                 if prism:
@@ -220,15 +259,53 @@ def read_ifc_truth(ifc_path, world_scale=None):
                                 and q.is_a("IfcQuantityArea") and q.AreaValue > 0:
                             props["truth_area_raw"] = q.AreaValue
                             break
+
+            # 通用 Pset / Qto 收集（用于属性维度比对）
+            _collect_pset_qto(elem, props)
+
             out[cat].append({
                 "global_id": elem.GlobalId,
                 "name": elem.Name or "",
+                # LongName carries the functional room name in many exports
+                # (e.g. Archicad: Name='101', LongName='Wohnen/Essen/Kochen').
+                # Without it the truth side can't classify rooms at all.
+                "long_name": getattr(elem, "LongName", None) or "",
                 "ifc_type": ifc_type,
                 "bbox_local": bbox,
                 "props": props,
             })
 
     return dict(out), world_scale
+
+
+def _collect_pset_qto(elem, props):
+    """收集元素上所有 Pset（属性）和 Qto（数量）的值，存入 props 字典。
+    Pset 用 "pset:<name>" 键，Qto 用 "qto:<name>" 键。
+    只收标量值（单值属性），忽略枚举/列表/复杂类型。"""
+    for rel in (elem.IsDefinedBy or []):
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        pd = rel.RelatingPropertyDefinition
+        if pd.is_a("IfcPropertySet"):
+            for p in pd.HasProperties:
+                if p.is_a("IfcPropertySingleValue") and p.NominalValue is not None:
+                    try:
+                        props[f"pset:{p.Name}"] = p.NominalValue.wrappedValue
+                    except Exception:
+                        pass
+        elif pd.is_a("IfcElementQuantity"):
+            for q in pd.Quantities:
+                try:
+                    if q.is_a("IfcQuantityLength"):
+                        props[f"qto:{q.Name}"] = q.LengthValue
+                    elif q.is_a("IfcQuantityArea"):
+                        props[f"qto:{q.Name}"] = q.AreaValue
+                    elif q.is_a("IfcQuantityVolume"):
+                        props[f"qto:{q.Name}"] = q.VolumeValue
+                    elif q.is_a("IfcQuantityCount"):
+                        props[f"qto:{q.Name}"] = q.CountValue
+                except Exception:
+                    pass
 
 
 # -------------------- 真值侧的字段取值（独立于提取器的实现） --------------------
@@ -270,6 +347,83 @@ def _truth_slab_thickness(elem, world_scale, declared_scale):
         _, _, dz = _bbox_dims(b)
         if dz > 0.01:
             return dz * world_scale
+    return None
+
+
+def _iter_body_items(elem):
+    """遍历 Body 表示的几何项，自动解引用 IfcMappedItem。"""
+    if not elem.Representation:
+        return
+    for rep in elem.Representation.Representations:
+        if rep.RepresentationIdentifier != "Body":
+            continue
+        for item in rep.Items:
+            if item.is_a("IfcMappedItem"):
+                mrep = item.MappingSource.MappedRepresentation
+                for mitem in mrep.Items:
+                    yield mitem
+            else:
+                yield item
+
+
+def _truth_pipe_diameter_length(elem, world_scale):
+    """真值侧管道直径（外径）和长度（米）。
+    优先从拉伸截面取（IfcCircleProfileDef.Radius × 2 = 直径，
+    Depth = 长度）；拿不到时走 Qto / bbox 兜底。
+    返回 (diameter_m, length_m) 或 (None, None)。
+    """
+    diameter = None
+    length = None
+
+    # 1. 拉伸截面（圆管最准）
+    for item in _iter_body_items(elem):
+        if not item.is_a("IfcExtrudedAreaSolid"):
+            continue
+        swept = item.SweptArea
+        if swept.is_a("IfcCircleProfileDef") or swept.is_a("IfcCircleHollowProfileDef"):
+            r = getattr(swept, "Radius", None)
+            if r and r > 0:
+                diameter = r * 2 * world_scale
+        depth = getattr(item, "Depth", None)
+        if depth and depth > 0:
+            length = depth * world_scale
+        if diameter and length:
+            break
+
+    # 2. Qto 兜底（Qto_PipeSegmentBaseQuantities.OuterDiameter / Length）
+    if diameter is None or length is None:
+        for rel in (elem.IsDefinedBy or []):
+            if not rel.is_a("IfcRelDefinesByProperties"):
+                continue
+            pd = rel.RelatingPropertyDefinition
+            if not pd.is_a("IfcElementQuantity") or "PipeSegment" not in pd.Name:
+                continue
+            for q in pd.Quantities:
+                if not q.is_a("IfcQuantityLength"):
+                    continue
+                if diameter is None and q.Name in ("OuterDiameter", "NominalDiameter"):
+                    diameter = q.LengthValue * world_scale
+                elif length is None and q.Name == "Length":
+                    length = q.LengthValue * world_scale
+
+    # 3. bbox 长度兜底（斜管不准，但至少有值）
+    if length is None:
+        b = _ifc_bbox(elem)
+        if b:
+            dx, dy, dz = _bbox_dims(b)
+            length = max(dx, dy, dz) * world_scale
+
+    return diameter, length
+
+
+def _truth_system_name(elem):
+    """真值侧管道所属系统名（通过 IfcRelAssignsToGroup / IfcSystem）。
+    找不到返回 None。"""
+    for rel in (elem.HasAssignments or []):
+        if rel.is_a("IfcRelAssignsToGroup"):
+            grp = rel.RelatingGroup
+            if grp.is_a("IfcSystem") and grp.Name:
+                return grp.Name
     return None
 
 
@@ -367,7 +521,9 @@ def collect_extracted(struct):
 # -------------------- 比对逻辑 --------------------
 
 # 需要用名称/几何对齐的类别（提取侧没有可用的 GlobalId）
-NAME_MATCH_CATS = {"wall", "door", "window", "stair", "ramp", "railing"}
+# wall/door/window/railing 已从 NAME_MATCH_CATS 移除——plan_elements 带 GlobalId，
+# 直接走 id 对齐即可（同名重名模型如 Jasmin 的 IfcWall-6 × 4 不再错配）。
+NAME_MATCH_CATS = {"stair", "ramp"}
 
 
 def _bbox_center(b):
@@ -441,27 +597,32 @@ def build_crosscheck(truth, truth_scale, extracted, ext_counts=None):
     stats = defaultdict(lambda: {"total": 0, "ok": 0, "wrong": 0, "missing_ext": 0, "extra_ext": 0})
     ext_counts = ext_counts or {}
 
-    # 提取器仅计数的类别（无逐件输出）：做计数比对，避免误报逐件漏读。
-    # 例如 stair / ramp / air_terminal / sanitary / outlet。
-    for cat in [c for c in list(truth.keys())
-                if c in COUNT_KEYS and not extracted.get(c)]:
+    # 计数维度：每个类别一行"真值总数 vs 提取总数"，统一出现在最前面，
+    # 便于一眼看出"个数对不对"。无论是否 COUNT_KEYS 都出（所有类都有计数）。
+    for cat in list(truth.keys()):
         items = truth[cat]
         tcount = len(items)
-        ecount = ext_counts.get(cat, 0)
-        ok_all = (ecount == tcount)
-        stats[cat]["total"] += tcount
-        rc = "" if ok_all else f"提取器计数 {ecount} ≠ IFC 真值 {tcount}"
-        for t in items:
-            rows.append({
-                "category": cat, "global_id": t["global_id"], "name": t["name"],
-                "field": "计数(类整体)", "truth_value": tcount,
-                "extracted_value": ecount,
-                "verdict": "✓" if ok_all else "✗", "root_cause": rc,
-            })
-            if ok_all:
-                stats[cat]["ok"] += 1
-            else:
-                stats[cat]["wrong"] += 1
+        # 提取侧总数：有逐件列表就取长度，否则取计数键
+        ec_list = extracted.get(cat, [])
+        ecount = len(ec_list) if ec_list else ext_counts.get(cat, 0)
+        # COUNT_KEYS 的类用结构计数（更可靠，逐件可能被省略）
+        if cat in COUNT_KEYS:
+            ecount = ext_counts.get(cat, ecount)
+        ok = (ecount == tcount)
+        stats[cat]["total"] += 1
+        stats[cat]["ok" if ok else "wrong"] += 1
+        rc = "" if ok else f"提取计数 {ecount} ≠ 真值 {tcount}"
+        rows.append({
+            "category": cat, "global_id": f"__{cat}__", "name": f"{cat} 合计",
+            "field": "计数_类整体", "truth_value": tcount,
+            "extracted_value": ecount,
+            "verdict": "✓" if ok else "✗", "root_cause": rc,
+            "dimension": "计数",
+        })
+
+    # 提取器仅计数的类别（无逐件输出）：跳过逐件存在性比对，避免误报漏读。
+    for cat in [c for c in list(truth.keys())
+                if c in COUNT_KEYS and not extracted.get(c)]:
         del truth[cat]
 
     # 提取侧 global_id 索引（有 id 的类别）
@@ -499,12 +660,13 @@ def build_crosscheck(truth, truth_scale, extracted, ext_counts=None):
                     "category": cat, "global_id": gid, "name": t["name"],
                     "field": "存在性", "truth_value": "有", "extracted_value": "无",
                     "verdict": "漏", "root_cause": "提取器未识别/未输出",
+                    "dimension": "存在性",
                 })
                 stats[cat]["missing_ext"] += 1
                 continue
 
-            # 按类别选比对字段
-            compare = _fields_for(cat)
+            # 按类别选比对字段（几何尺寸类）
+            compare = _fields_for(cat) + _classification_fields(cat)
             for field, truth_getter, ext_key in compare:
                 tv = truth_getter(t, truth_scale)
                 ev = ext.get(ext_key)
@@ -533,7 +695,7 @@ def build_crosscheck(truth, truth_scale, extracted, ext_counts=None):
                         stats[cat]["ok"] += 1
                     else:
                         verdict = "✗"
-                        root_cause = "值不匹配"
+                        root_cause = "分类/值不匹配"
                         stats[cat]["wrong"] += 1
                 rows.append({
                     "category": cat, "global_id": gid, "name": t["name"],
@@ -541,6 +703,31 @@ def build_crosscheck(truth, truth_scale, extracted, ext_counts=None):
                     "truth_value": _fmt(tv),
                     "extracted_value": _fmt(ev),
                     "verdict": verdict, "root_cause": root_cause,
+                    "dimension": "几何尺寸" if field in {f[0] for f in _fields_for(cat)} else "分类",
+                })
+
+            # 属性/Pset 维度：只比两边都有值的
+            for field, tgetter, ekey, vtype in _property_fields(cat):
+                tv = tgetter(t, truth_scale)
+                ev = ext.get(ekey)
+                if tv is None or ev is None:
+                    continue
+                ok = False
+                if vtype == "numeric" and isinstance(tv, (int, float)) and isinstance(ev, (int, float)):
+                    ok = _close(tv, ev)
+                else:
+                    ok = (str(tv) == str(ev))
+                if ok:
+                    verdict = "✓"; stats[cat]["ok"] += 1; rc = ""
+                else:
+                    verdict = "✗"; stats[cat]["wrong"] += 1; rc = "属性值不匹配"
+                rows.append({
+                    "category": cat, "global_id": gid, "name": t["name"],
+                    "field": field,
+                    "truth_value": _fmt(tv),
+                    "extracted_value": _fmt(ev),
+                    "verdict": verdict, "root_cause": rc,
+                    "dimension": "属性",
                 })
 
     # 提取侧多余的（在真值里没匹配上的）
@@ -552,6 +739,7 @@ def build_crosscheck(truth, truth_scale, extracted, ext_counts=None):
                     "name": it.get("name", ""),
                     "field": "存在性", "truth_value": "无", "extracted_value": "有",
                     "verdict": "多", "root_cause": "提取器多读/归类到不存在的类",
+                    "dimension": "存在性",
                 })
                 stats[cat]["extra_ext"] += 1
             continue
@@ -563,6 +751,7 @@ def build_crosscheck(truth, truth_scale, extracted, ext_counts=None):
                     "category": cat, "global_id": it.get("global_id", ""), "name": it.get("name", ""),
                     "field": "存在性", "truth_value": "无", "extracted_value": "有",
                     "verdict": "多", "root_cause": "提取器多读/归类错误",
+                    "dimension": "存在性",
                 })
                 stats[cat]["extra_ext"] += 1
 
@@ -605,10 +794,12 @@ def _fields_for(cat):
         return getter
 
     if cat == "wall":
+        # 注：墙高（height_m）不做逐件比对——跨层墙在真值侧是总高、在提取侧是
+        # 分层高度，口径天然不一致；且没有审查规则依赖墙高（墙高=层高是派生量）。
+        # 审查核心是厚度+长度，这两个量不会受分层影响。
         return [
             ("厚度_m", bbox_thickness(), "thickness_m"),
             ("长度_m", bbox_width(), "length_m"),
-            ("高度_m", bbox_h(), "height_m"),
         ]
     if cat in ("door", "window"):
         return [
@@ -616,9 +807,9 @@ def _fields_for(cat):
             ("高度_m", bbox_h(), "height_m"),
         ]
     def prism(key):
+        # 真值侧 prism 已按数据来源（extrusion=declared / PCA=world）换算为米
         def getter(t, s):
-            raw = t["props"].get(key)
-            return raw * s if raw is not None else None
+            return t["props"].get(key)
         return getter
 
     if cat == "column":
@@ -644,9 +835,95 @@ def _fields_for(cat):
         return [("高度_m", bbox_h(), "height_m"),
                 ("长度_m", bbox_width(), "length_m")]
     if cat == "pipe":
-        # 直径/长度真值暂缺独立可靠来源（NominalDiameter 公称 ≠ 几何外径，
-        # bbox 对斜管失真），先只做存在性/id 比对；直径校验待 Qto/profile 真值。
-        return []
+        def pipe_diam(t, s):
+            return t["props"].get("truth_diameter_m")
+        def pipe_len(t, s):
+            return t["props"].get("truth_length_m")
+        return [
+            ("直径_m", pipe_diam, "diameter_m"),
+            ("长度_m", pipe_len, "length_m"),
+        ]
+    if cat == "room":
+        pass  # 面积在上面已加；分类在另一个分支
+    return []
+
+
+def _classification_fields(cat):
+    """分类字段：[(字段名, 真值取值函数(t, scale), 提取器key)]。
+
+    用和 extractor 同一套关键词，把真值侧的元素名映射成类型标签，再和
+    提取侧的 type 字段对比。目的是检查"分类对不对"，不是检查名字像不像。
+    """
+    def room_type_truth(t, s):
+        # 和提取器用同一证据源：ref/name/LongName 里任一含功能词即归类。
+        # LongName 缺失时退化为 name（旧行为），不会更差。
+        nm = f'{t.get("long_name","")} {t["name"]} {t.get("ifc_type", "")}'
+        return EX._classify_room_type(nm)
+
+    def pipe_type_truth(t, s):
+        nm = f'{t["name"]} {t.get("ifc_type", "")}'
+        # 真值侧用和提取器一样的启发式：名字/系统关键词 → pipe_type
+        tnm = nm.lower()
+        if any(k in tnm for k in ("fire", "消防", "sprinkler", "喷淋")):
+            return "fire_protection"
+        if any(k in tnm for k in ("water", "供", "给水", "上水", "domestic")):
+            return "water_supply"
+        if any(k in tnm for k in ("drain", "污水", "排水", "污废水", "雨水")):
+            return "drainage"
+        if any(k in tnm for k in ("gas", "燃气", "煤气")):
+            return "gas"
+        if any(k in tnm for k in ("hvac", "heating", "供热", "采暖")):
+            return "heating"
+        return "unknown"
+
+    def equip_type_truth(t, s):
+        nm = t["name"]
+        return EX._electrical_equip_kind_name(nm) if hasattr(EX, "_electrical_equip_kind_name") else None
+
+    if cat == "room":
+        return [("房间类型", room_type_truth, "type")]
+    if cat == "pipe":
+        return [("管道类型", pipe_type_truth, "pipe_type")]
+    return []
+
+
+def _property_fields(cat):
+    """属性/Pset 字段：从真值侧 Pset 读，和提取侧对应字段比。
+
+    只比两边都有值的条目；缺一边就跳过（不记对错），保持诚实。
+    返回 [(字段名, 真值取值函数(t, scale), 提取器key, 类型)]
+    类型："numeric"（数值容差比对）或 "string"（相等比对）或 "bool"
+    """
+    def pset_val(pname, ptype=None):
+        def getter(t, s):
+            return t.get("props", {}).get(f"pset:{pname}")
+        return getter
+
+    def qto_val(qname):
+        def getter(t, s):
+            v = t.get("props", {}).get(f"qto:{qname}")
+            return v * s if v is not None and ptype_is_length(qname) else v
+        return getter
+
+    def ptype_is_length(qn):
+        return any(k in qn for k in ("Thickness", "Length", "Width", "Height", "Depth", "Diameter"))
+
+    if cat == "door":
+        return [
+            ("OverallWidth", pset_val("OverallWidth"), "width_m", "numeric"),
+            ("OverallHeight", pset_val("OverallHeight"), "height_m", "numeric"),
+        ]
+    if cat == "window":
+        return [
+            ("OverallWidth", pset_val("OverallWidth"), "width_m", "numeric"),
+            ("OverallHeight", pset_val("OverallHeight"), "height_m", "numeric"),
+        ]
+    if cat == "slab":
+        return [("Qto厚度", qto_val("GrossThickness"), "thickness_m", "numeric")]
+    if cat == "room":
+        return [("Qto面积_m2", qto_val("GrossFloorArea"), "area_sqm", "numeric")]
+    if cat == "pipe":
+        return [("公称直径", pset_val("NominalDiameter"), "diameter_m", "numeric")]
     return []
 
 
@@ -662,12 +939,15 @@ def _guess_root_cause(cat, field, tv, ev):
 
 # -------------------- 主流程 --------------------
 
-def crosscheck_file(ifc_path):
+def crosscheck_file(ifc_path, structural_scope=False):
     model = Path(ifc_path).stem
-    struct = parse_ifc(str(ifc_path))
+    # force_plan：离线互检必须拿到大模型被性能闸门跳过的墙/门/窗/栏杆，
+    # 否则会把"为网页速度未提取"误报成"提取器漏读"。
+    struct = parse_ifc(str(ifc_path), force_plan=True)
     # 用 parser 校准后的 world_scale 做真值单位（混合单位模型只用声明会错 1000 倍）
     world_scale = struct.get("scale_info", {}).get("world_scale", 1.0)
-    truth, truth_scale = read_ifc_truth(ifc_path, world_scale=world_scale)
+    truth, truth_scale = read_ifc_truth(ifc_path, world_scale=world_scale,
+                                        structural_scope=structural_scope)
     extracted, ext_counts = collect_extracted(struct)
     rows, stats = build_crosscheck(truth, truth_scale, extracted, ext_counts)
     return model, rows, stats, struct
@@ -680,7 +960,7 @@ def write_outputs(model, rows, stats, out_dir):
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=["category", "global_id", "name", "field",
                                           "truth_value", "extracted_value",
-                                          "verdict", "root_cause"])
+                                          "verdict", "root_cause", "dimension"])
         w.writeheader()
         w.writerows(rows)
 
@@ -721,6 +1001,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("target", help="IFC file or directory")
     ap.add_argument("--out", default="output/crosscheck")
+    ap.add_argument("--structural-scope", action="store_true",
+                    help="真值侧剔除非结构件（吊顶/保温/防水、匿名柱）后再比对")
     args = ap.parse_args()
 
     target = Path(args.target)
@@ -734,7 +1016,7 @@ def main():
     for fp in files:
         print(f"\n=== {fp.name} ===")
         try:
-            model, rows, stats, _ = crosscheck_file(fp)
+            model, rows, stats, _ = crosscheck_file(fp, args.structural_scope)
             csv_path, md_path = write_outputs(model, rows, stats, args.out)
             print(f"  rows: {len(rows)}  ->  {csv_path}")
             print(f"  summary -> {md_path}")

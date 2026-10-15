@@ -1,0 +1,14 @@
+﻿name,gold,before_keyword,after_keyword_plus_AI,correct_after,changed,harmful_guess
+Stuetze S1,wood,wood,wood,1,0,0
+Balken B2,steel,steel,steel,1,0,0
+Column C1,concrete,concrete,concrete,1,0,0
+Wand W1,masonry,masonry,masonry,1,0,0
+Holzstuetze H1,wood,unknown,wood,1,1,0
+Stahltraeger B3,steel,unknown,steel,1,1,0
+Floor:Timber Suspended Floor,wood,unknown,wood,1,1,0
+Basic Roof:Warm Roof-Timber,wood,unknown,wood,1,1,0
+Pad:Pad 1,concrete,unknown,concrete,1,1,0
+Floor:Generic 150mm,unknown,unknown,unknown,1,0,0
+Slab-033,unknown,unknown,unknown,1,0,0
+Deckenplatte D1,unknown,unknown,unknown,1,0,0
+"Col 4,2.5 1",unknown,unknown,unknown,1,0,0

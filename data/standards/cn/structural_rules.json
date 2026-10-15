@@ -12,7 +12,11 @@
         "condition_threshold": "column",
         "severity": "Medium",
         "code_ref": "GB 50011",
-        "message": "柱截面最小边 {value}m 小于构造要求 {threshold}m，需加大柱截面。"
+        "message": "柱截面最小边 {value}m 小于构造要求 {threshold}m，需加大柱截面。",
+        "conditions_all": [
+            {"field": "material_class", "operator": "not_in",
+             "threshold": ["wood", "steel", "masonry"]}
+        ]
     },
     {
         "id": "STR-002",
@@ -33,7 +37,11 @@
         "condition_threshold": "beam",
         "severity": "Medium",
         "code_ref": "GB 50010",
-        "message": "梁截面高度 {value}m 小于构造要求 {threshold}m，需加大梁高。"
+        "message": "梁截面高度 {value}m 小于构造要求 {threshold}m，需加大梁高。",
+        "conditions_all": [
+            {"field": "material_class", "operator": "not_in",
+             "threshold": ["wood", "steel", "masonry"]}
+        ]
     },
     {
         "id": "STR-003",
@@ -48,7 +56,12 @@
         "condition_threshold": "slab",
         "severity": "Low",
         "code_ref": "GB 50010",
-        "message": "楼板厚度 {value}m 小于要求 {threshold}m，需增加板厚。"
+        "message": "楼板厚度 {value}m 小于要求 {threshold}m，需增加板厚。",
+        "conditions_all": [
+            {"field": "material_class", "operator": "not_in",
+             "threshold": ["wood", "steel", "masonry"]},
+            {"field": "cast_in_place", "operator": "==", "threshold": true}
+        ]
     },
     {
         "id": "STR-004",
@@ -63,6 +76,10 @@
         "condition_threshold": "beam",
         "severity": "Low",
         "code_ref": "GB 50010",
-        "message": "梁截面宽度 {value}m 小于构造要求 {threshold}m，需加大梁宽。"
+        "message": "梁截面宽度 {value}m 小于构造要求 {threshold}m，需加大梁宽。",
+        "conditions_all": [
+            {"field": "material_class", "operator": "not_in",
+             "threshold": ["wood", "steel", "masonry"]}
+        ]
     }
 ]

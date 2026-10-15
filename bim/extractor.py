@@ -408,6 +408,70 @@ def _elem_material(e):
     return None
 
 
+# Coarse material classification — multilingual, substring-matched. Used only to
+# EXCLUDE clearly steel/wood/masonry elements from the concrete-section rules
+# (STR-001…004 via conditions_all). Anything unrecognised falls through to None
+# and stays judged, so the filter never silently drops an element whose material
+# we simply couldn't read.
+_MAT_STEEL_KEYS = ("staal", "steel", "stahl", "stål", "hup", "hea", "heb", "ipe",
+                   "inox", "metaal", "koker", "conduit", "s235", "s275", "s355", "钢")
+_MAT_WOOD_KEYS = ("hout", "wood", "holz", "timber", "furu", "lerk", "spruce",
+                  "pine", "pfette", "木", "檩", "椽")
+_MAT_MASONRY_KEYS = ("metsel", "masonry", "baksteen", "betonsteen", "kalksand",
+                     "brick", "砌", "砖")
+_MAT_CONCRETE_KEYS = ("beton", "concrete", "betong", "gewapend", "bewapend",
+                      "cement", "prefab", "bærende", "dekvloer", "混凝土", "砼")
+
+# Non-structural names/materials that are nonetheless exported as IfcSlab
+# (suspended ceilings, screeds) or IfcColumn (railing balusters). Skipped so the
+# structural rules never judge a finish as structure — the root of the HITOS
+# 223 / Schependomlaan 132 phantom STR-003 flags.
+_NONSTRUCT_KEYS = (
+    "himling", "plafond", "ceiling", "吊顶", "suspended", "verlaagd", "verhang",
+    "dekvloer", "screed", "zandcement", "afwerkvloer", "找平", "estrich",
+    "isolatie", "isolasjon", "insulation", "mineraalwol", "mineralull",
+    "steinull", "stonewool", "glasswool",
+    "保温", "隔热",
+    "tegel", "vloertegel", "parket", "laminaat", "瓷砖", "地砖",
+    "dakbedekking", "taktekking", "roofing", "bitumen", "papp",
+    "påstøp", "pasta", "baluster", "leuning", "railing", "handrail", "栏杆",
+)
+
+# IfcColumn elements that are actually shear walls / wall panels — common in
+# precast models (e.g. HITOS "BS-skive" 200x1000mm = concrete wall panel).
+# Detected by name + high section aspect ratio. These are walls, not columns,
+# so column-section rules (STR-001) don't apply to them.
+_WALL_COLUMN_KEYS = (
+    "skive", "vegg", "væg", "wand", "wall", "shear",
+    "panel", "precast wall", "wall panel", "façade", "facade",
+    "墙", "剪力墙", "墙板", "墙片", "墙肢",
+)
+_WALL_COLUMN_MIN_ASPECT = 3.0
+
+
+def _material_class(material_name, e=None):
+    """Coarse structural material class: 'steel'/'wood'/'masonry'/'concrete'/None.
+
+    Combines the material name with the element's Name/ObjectType so steel
+    sections that carry no material (e.g. HITOS 'NO_VF HUP 100x100x6.3',
+    Schependomlaan 'staallatei'/'HEA180') are still recognised as steel.
+    Order matters: 'stahlbeton' (reinforced concrete) must resolve to concrete,
+    not steel, so wood/masonry/concrete are tested before steel.
+    """
+    hay = " ".join(str(x).lower() for x in (
+        material_name, getattr(e, "Name", None),
+        getattr(e, "ObjectType", None)) if x)
+    if any(k in hay for k in _MAT_WOOD_KEYS):
+        return "wood"
+    if any(k in hay for k in _MAT_MASONRY_KEYS):
+        return "masonry"
+    if any(k in hay for k in _MAT_CONCRETE_KEYS):
+        return "concrete"
+    if any(k in hay for k in _MAT_STEEL_KEYS):
+        return "steel"
+    return None
+
+
 def _pipe_slope_from_geom(e, settings):
     """Slope (rise/horiz) from a sloped pipe's tessellated geometry — the
     fallback when the model doesn't carry the slope in a property (real IFCs)."""
@@ -709,6 +773,36 @@ def _extrusion_profile_info(e, scale):
     return None
 
 
+def _profile_info_checked(e, scale, settings, psc):
+    """Extrusion profile info (m) cross-checked against the element's geometry.
+
+    Used when the global profile unit scale is *unknown* (``_infer_profile_scale``
+    found no pipe/duct samples — e.g. buildings with no MEP, like HITOS). The
+    extrusion profile is authored in the **declared** unit, so ``psc``
+    (declared metres-per-unit) is the right multiplier — but a wrong guess
+    (e.g. applying the world scale to an mm-declared model) inflates ~1000x.
+    Accept the profile only when its larger section dimension is within a
+    generous band of the geometry bbox middle extent; otherwise return None so
+    the caller falls back to PCA/bbox.
+
+    This also fixes the square-section failure of PCA: for a 45°-rotated square
+    column the principal axes are degenerate and PCA reads the diagonal
+    (side*sqrt2), whereas the extrusion profile carries the exact side.
+    """
+    if not psc:
+        return None
+    info = _extrusion_profile_info(e, psc)
+    if not info:
+        return None
+    d = _elem_bbox_dims(e, scale, settings)
+    ref = sorted(d)[1] if d else None
+    if ref and ref > 0:
+        r = info["section_max_m"] / ref
+        if not (0.4 <= r <= 2.5):
+            return None
+    return info
+
+
 def _pca_dims(elem, settings, scale):
     """Long/short dimensions (m) of a prismatic element via PCA on its mesh.
 
@@ -849,7 +943,8 @@ def _pipe_data(e, scale, settings, profile_scale=None):
 
     material = _elem_material(e)
 
-    out = {"name": e.Name or e.GlobalId, "pipe_type": pipe_type,
+    out = {"name": e.Name or e.GlobalId, "global_id": e.GlobalId,
+           "pipe_type": pipe_type,
            "diameter_m": diameter, "slope": slope, "length_m": length,
            "material": material}
     # fire hydrant spacing centroid
@@ -1072,6 +1167,8 @@ def _electrical_equip_kind(e):
         return et
     nm = (e.Name or "").lower()
     t = e.is_a()
+    if "switch" in nm or "开关" in nm:
+        return None  # switching devices are not fixtures (avoid "Lighting Switch" -> lighting)
     if any(k in nm for k in ("light", "lamp", "pendant", "sconce", "downlight", "应急", "筒灯", "灯具")):
         return "lighting"
     if any(k in nm for k in ("receptacle", "outlet", "socket", "插座")):
@@ -1124,8 +1221,12 @@ def _electrical_equipment(els, room_type_map):
         elif et == "distribution":
             d["circuit_load_a"] = _pset_value(e, "ArchCheckEEEEquip", "circuit_load_a")
             d["dist_to_water_m"] = _pset_value(e, "ArchCheckEEEEquip", "dist_to_water_m")
-            if _pset_value(e, "ArchCheckEEEEquip", "fire_rated") or \
-               any(k in nm for k in ("fire rated", "耐火")):
+            # record an explicit True/False so EEE-009 can flag a panel the model
+            # declares NOT fire-rated; only infer True from the name when silent.
+            _fire_rated = _pset_value(e, "ArchCheckEEEEquip", "fire_rated")
+            if _fire_rated is not None:
+                d["fire_rated"] = bool(_fire_rated)
+            elif any(k in nm for k in ("fire rated", "耐火")):
                 d["fire_rated"] = True
         out.append(d)
     return out
@@ -1252,8 +1353,13 @@ def _detect_clashes_list(mep_els, solid_els, settings, margin=0.05):
             oy = min(ba[3], bb[3]) - max(ba[1], bb[1])
             oz = min(ba[5], bb[5]) - max(ba[4], bb[4])
             if ox > margin and oy > margin and oz > margin:
+                # 重叠体块（模型坐标，供 3D 相机聚焦到冲突点）
+                ov = (max(ba[0], bb[0]), max(ba[1], bb[1]), max(ba[2], bb[2]),
+                      min(ba[3], bb[3]), min(ba[4], bb[4]), min(ba[5], bb[5]))
                 out.append({"mep": a.Name or "?", "vs": b.Name or "?",
                             "type": b.is_a(), "depth": round(min(ox, oy, oz), 2),
+                            "mep_gid": a.GlobalId or "", "vs_gid": b.GlobalId or "",
+                            "overlap": [round(v, 2) for v in ov],
                             "confirmed": _confirm_clash(a, b, settings)})
     return out
 
@@ -1287,10 +1393,16 @@ def _confirm_clash(a, b, settings):
     return False
 
 
-def _plan_elements(els, settings, cap=150):
+def _plan_elements(els, settings, cap=4000):
     """Footprint geometry of physical elements (walls/columns/windows/...) for
     drawing a data-driven plan/3D view. Same coordinate frame as room hulls
-    (model units, world coords). Bounded by ``cap`` per storey."""
+    (model units, world coords). Bounded by ``cap`` per storey.
+
+    The cap is a runaway guard only: real storeys (even HITOS: 260 walls + 99
+    slabs + 47 doors + 81 windows) stay far below it, so no physical element is
+    silently dropped. A low cap used to truncate wall/door/window extraction,
+    which both under-reported the class counts and mis-paired the survivors
+    during crosscheck geometry matching."""
     out = []
     for e in els:
         kind = _plan_element_kind(e)
@@ -1303,6 +1415,7 @@ def _plan_elements(els, settings, cap=150):
         if x1 - x0 < 1e-6 or y1 - y0 < 1e-6 or z1 - z0 < 1e-6:
             continue
         out.append({"kind": kind, "name": e.Name or "",
+                    "id": e.GlobalId or "",
                     "bbox": [round(v, 2) for v in b]})
     return out
 
@@ -1421,12 +1534,12 @@ def _slab_thickness_m(e, scale, settings, profile_scale=None):
     """
     if profile_scale is not None:
         # 1. Qto
+        cand = None
         qto = _qto_value(e, "Qto_SlabBaseQuantities", "GrossThickness")
         if qto is not None and qto > 0:
-            return qto * profile_scale
-
+            cand = qto * profile_scale
         # 2. Extrusion depth (Body representation)
-        if e.Representation:
+        elif e.Representation:
             for rep in e.Representation.Representations:
                 if rep.RepresentationIdentifier != "Body":
                     continue
@@ -1434,7 +1547,19 @@ def _slab_thickness_m(e, scale, settings, profile_scale=None):
                     if item.is_a("IfcExtrudedAreaSolid"):
                         depth = getattr(item, "Depth", None)
                         if depth and depth > 0:
-                            return depth * profile_scale
+                            cand = depth * profile_scale
+                            break
+                if cand is not None:
+                    break
+        if cand is not None and cand > 0:
+            # cross-check against PCA smallest axis: reject a profile value that
+            # is wildly off (sign of a wrong unit scale) and fall through to PCA.
+            pca_th = None
+            pca = _pca_dims(e, settings, scale)
+            if pca and pca[0] > 0.005:
+                pca_th = pca[0]
+            if pca_th is None or 0.4 <= cand / pca_th <= 2.5:
+                return cand
 
     # 3. PCA smallest axis — slab is a flat panel, its thinnest direction is
     #    the thickness regardless of how the slab is tilted in world space.
@@ -1451,7 +1576,7 @@ def _slab_thickness_m(e, scale, settings, profile_scale=None):
 
 
 def _structural_sections(els, settings, scale, profile_scale=None,
-                         col_cap=500, other_cap=500):
+                         declared_scale=None, col_cap=500, other_cap=500):
     """Structural element data from storey elements.
 
     Returns (elements, column_sections, beam_sections, slab_thicknesses,
@@ -1468,11 +1593,28 @@ def _structural_sections(els, settings, scale, profile_scale=None,
     ncol = nbeam = nslab = nfooting = 0
     unit_suspicious = 0
     for e in els:
+        # material name + coarse class computed once, shared by all element dicts
+        _mat = _elem_material(e)
+        _mcls = _material_class(_mat, e)
+        # drop non-structural finishes exported as slabs/columns (suspended
+        # ceilings, screeds, insulation, railing balusters) before they can be
+        # judged by the structural rules.
+        _hay = f"{e.Name or ''} {_mat or ''}".lower()
+        if (e.is_a("IfcSlab") or e.is_a("IfcColumn")) and any(
+                k in _hay for k in _NONSTRUCT_KEYS):
+            continue
         if e.is_a("IfcColumn"):
             if ncol >= col_cap:
                 continue
-            ncol += 1
-            info = _extrusion_profile_info(e, profile_scale) if profile_scale else None
+            # Anonymous export artefacts — an IfcColumn with no Name, no
+            # ObjectType and no material carries nothing that can confirm it is
+            # a structural column (e.g. HITOS ArchiCAD "Graphisoft … OBJECT"
+            # placeholders). Judging them on a column-section rule is a phantom
+            # finding, so they're left out of the structural set.
+            if not ((e.Name or "").strip() or (getattr(e, "ObjectType", "") or "").strip() or _mat):
+                continue
+            info = (_extrusion_profile_info(e, profile_scale) if profile_scale
+                    else _profile_info_checked(e, scale, settings, declared_scale))
             d = _elem_bbox_dims(e, scale, settings)
             sec_min = sec_max = height = None
             if info:
@@ -1490,6 +1632,14 @@ def _structural_sections(els, settings, scale, profile_scale=None,
                     unit_suspicious += 1
                     continue
             if sec_min and sec_max and 0.05 < sec_min and sec_max < 2.0:
+                # Wall panels modelled as IfcColumn (e.g. precast shear walls)
+                # have a very wide cross-section — skip them, they're walls.
+                _aspect = sec_max / sec_min if sec_min > 0 else 1
+                _col_hay = f"{e.Name or ''} {getattr(e, 'ObjectType', '') or ''}".lower()
+                if _aspect >= _WALL_COLUMN_MIN_ASPECT and any(
+                        k in _col_hay for k in _WALL_COLUMN_KEYS):
+                    continue
+                ncol += 1
                 col_sec.append((round(sec_min, 3), round(sec_max, 3)))
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
                                  "element_type": "column",
@@ -1497,12 +1647,13 @@ def _structural_sections(els, settings, scale, profile_scale=None,
                                  "section_max_m": round(sec_max, 3),
                                  "height_m": round(height, 3) if height else None,
                                  "volume_m3": _elem_volume(e, settings, scale),
-                                 "material": _elem_material(e)})
+                                 "material": _mat, "material_class": _mcls})
         elif e.is_a("IfcBeam"):
             if nbeam >= other_cap:
                 continue
             nbeam += 1
-            info = _extrusion_profile_info(e, profile_scale) if profile_scale else None
+            info = (_extrusion_profile_info(e, profile_scale) if profile_scale
+                    else _profile_info_checked(e, scale, settings, declared_scale))
             d = _elem_bbox_dims(e, scale, settings)
             sec_min = sec_max = span = None
             if info:
@@ -1529,29 +1680,38 @@ def _structural_sections(els, settings, scale, profile_scale=None,
                                  "width_m": round(sec_min, 3),
                                  "span_m": round(span, 3) if span else None,
                                  "volume_m3": _elem_volume(e, settings, scale),
-                                 "material": _elem_material(e)})
+                                 "material": _mat, "material_class": _mcls})
         elif e.is_a("IfcSlab"):
             if nslab >= other_cap:
                 continue
             nslab += 1
             d = _elem_bbox_dims(e, scale, settings)
-            thickness = _slab_thickness_m(e, scale, settings, profile_scale)
+            thickness = _slab_thickness_m(
+                e, scale, settings,
+                profile_scale if profile_scale else declared_scale)
             if thickness is None or thickness < 0.01:
                 unit_suspicious += 1
                 continue
             if 0.02 < thickness < 1.0:
                 slab_th.append(round(thickness, 3))
+                # STR-003 governs CAST-IN-PLACE slabs. Precast planks (material
+                # '…prefab', e.g. Schependomlaan vloerveld 60mm planks that work
+                # compositely with a topping) are flagged out of scope rather
+                # than judged on the 60mm plank alone.
+                _prefab = "prefab" in f"{_mat or ''} {getattr(e, 'ObjectType', '') or ''}".lower()
                 elements.append({"id": e.GlobalId, "name": e.Name or e.GlobalId,
                                  "element_type": "slab",
+                                 "cast_in_place": not _prefab,
                                  "thickness_m": round(thickness, 3),
                                  "span_m": round(max(d[0], d[1]), 3) if d else None,
                                  "volume_m3": _elem_volume(e, settings, scale),
-                                 "material": _elem_material(e)})
+                                 "material": _mat, "material_class": _mcls})
         elif e.is_a("IfcFooting"):
             if nfooting >= other_cap:
                 continue
             nfooting += 1
-            info = _extrusion_profile_info(e, profile_scale) if profile_scale else None
+            info = (_extrusion_profile_info(e, profile_scale) if profile_scale
+                    else _profile_info_checked(e, scale, settings, declared_scale))
             d = _elem_bbox_dims(e, scale, settings)
             thickness = span = None
             if info:
@@ -1577,7 +1737,7 @@ def _structural_sections(els, settings, scale, profile_scale=None,
                                  "thickness_m": round(thickness, 3),
                                  "span_m": round(span, 3) if span else None,
                                  "volume_m3": _elem_volume(e, settings, scale),
-                                 "material": _elem_material(e)})
+                                 "material": _mat, "material_class": _mcls})
     return elements, sorted(set(col_sec)), sorted(set(beam_sec)), sorted(set(slab_th)), unit_suspicious
 
 
@@ -1627,6 +1787,28 @@ def _ramp_slope(ramp, scale):
             return None
         slope = rise / run
         return round(slope, 4) if 0.0 < slope <= 1.0 else None
+    except Exception:
+        return None
+
+
+def _ramp_width(ramp, scale):
+    """Clear width (m) of an IfcRamp/IfcRampFlight from its geometry bbox.
+
+    The longer horizontal extent is the travel direction (run); the shorter is
+    the clear width. Returns None for degenerate shapes so the review reports
+    "data missing" rather than inventing a width.
+    """
+    try:
+        st = ifcgeom.settings()
+        st.set(st.USE_WORLD_COORDS, True)
+        shape = ifcgeom.create_shape(st, ramp)
+        v = shape.geometry.verts
+        if len(v) < 6:
+            return None
+        xs = v[0::3]
+        ys = v[1::3]
+        w = min(max(xs) - min(xs), max(ys) - min(ys)) * scale
+        return round(w, 3) if 0.1 < w < 20.0 else None
     except Exception:
         return None
 
@@ -1956,12 +2138,12 @@ def _classify_room_type(name):
         return "Corridor"
     if any(k in n for k in (
         "meet", "会议", "training", "培训", "class", "教室", "auditor", "多功能",
-        "besprech", "sitzung", "konferenz", "meeting",  # 德语
+        "besprech", "sitzung", "konferenz", "schulung", "meeting",  # 德语
     )):
         return "Meeting Room"
     if any(k in n for k in (
         "electr", "mep", "配电", "设备", "mech", "plant", "机房", "lift", "elev",
-        "techn", "gerät", "maschinen", "hausanschluss", "schacht",  # 德语
+        "techn", "gerät", "maschinen", "hausanschluss", "schacht", "server", "elektro",
         "el.", "lift", "aufzug",  # 德语电梯/电气
     )):
         return "Equipment Room"
@@ -1976,7 +2158,74 @@ def _classify_room_type(name):
         "büro", "buro", "kontor", "kont.", "arbeitsplatz",  # 德语/北欧
     )):
         return "Office"
+    # --- 住宅类（2026-09-20 扩充；住宅模型 living/bedroom/kitchen 等）---
+    if any(k in n for k in (
+        "living", "wohn", "客厅", "起居",
+    )):
+        return "Living Room"
+    if any(k in n for k in (
+        "bed", "schlaf", "kinderzimmer", "卧",
+    )):
+        return "Bedroom"
+    if any(k in n for k in (
+        "kitchen", "kueche", "küche", "koch", "厨房", "灶",
+    )):
+        return "Kitchen"
+    if any(k in n for k in (
+        "dining", "esszimmer", "essen", "餐厅", "饭厅",
+    )):
+        return "Dining Room"
+    if any(k in n for k in (
+        "storage", "storeroom", "lager", "archiv", "abstell", "putzmittel",
+        "储藏", "仓库", "杂物", "库房",
+    )):
+        return "Storage"
+    if any(k in n for k in (
+        "reception", "empfang", "rezeption", "前台", "接待",
+    )):
+        return "Reception"
     return "Unknown"
+
+
+_TOILET_KEYS = ("wc", "toilet", "洗手", "厕所", "restroom", "bath", "washroom",
+                "bad", "dusche", "sanitär", "sanitaer", "klos", "toilette", "rwc")
+_ACCESS_TOILET_KEYS = ("accessible", "无障碍", "残疾人", "barrierfree",
+                       "barrierefrei", "wheelchair", "disabled")
+# A toilet room this large can fit a 1.5m turning circle (GB 50763 wheelchair
+# access minimum) — used as a *conservative* proxy when the model carries no
+# explicit "accessible" flag. 4 m² is a floor, not a Code ceiling.
+_ACCESS_TOILET_MIN_AREA = 4.0
+
+
+def _count_accessible_toilets(struct, floors):
+    """Count toilet rooms that look accessible.
+
+    A "toilet room" is any room the classifier typed ``Vestibule`` (in this
+    pipeline that type is produced *only* by the wc/toilet keyword block) or
+    whose name carries a toilet keyword. Returns None when the model has no
+    such room at all (honest "未检查" — we cannot tell "no toilet" from "toilet
+    not modelled"). Returns an integer otherwise: rooms explicitly named
+    accessible, plus rooms whose area clears the wheelchair-turning proxy.
+    """
+    toilet_rooms = []
+    for f in floors:
+        for r in f.get("rooms", []):
+            nm = str(r.get("name", "")).lower()
+            tp = str(r.get("type", "")).lower()
+            if tp == "vestibule" or any(k in nm for k in _TOILET_KEYS):
+                toilet_rooms.append(r)
+    if not toilet_rooms:
+        return None
+    count = 0
+    for r in toilet_rooms:
+        nm = str(r.get("name", "")).lower()
+        if any(k in nm for k in _ACCESS_TOILET_KEYS):
+            count += 1
+            continue
+        area = r.get("room_area_sqm")
+        if area is not None and area >= _ACCESS_TOILET_MIN_AREA:
+            count += 1
+    return count
 
 
 def _max_room_travel(room_door_centroids, hull, scale):
@@ -2009,20 +2258,89 @@ def _max_room_travel(room_door_centroids, hull, scale):
     return round(best * scale, 2)
 
 
-def _building_fire_stats(m):
-    """(fire_elevator_count, fire_extinguisher_count) counted from raw elements."""
-    elev = 0
+_ELEV_KEYS = ("lift", "elevator", "elev.", "电梯", "升降机",
+              "aufzug", "heis", "elevator", "elev.", "ascensor", "ascenseur")
+_FIRE_ELEV_KEYS = ("fire", "消防", "feuer", "brandschutz")
+_ACCESS_ELEV_KEYS = ("accessible", "无障碍", "残疾人", "barrierfree",
+                     "barrierefrei", "wheelchair", "disabled")
+_EXTING_KEYS = ("exting", "灭火", "feuerlscher", "brandschutz")
+_PARKING_KEYS = ("park", "停车场", "车位", "parking", "parkplatz", "car park")
+_ACCESS_PARK_KEYS = ("accessible park", "无障碍车位", "残疾人车位",
+                     "barrierfree park", "barrierefrei park")
+
+def _building_stats(m):
+    """Count building-level accessibility / fire / vertical-circulation elements.
+
+    Returns a dict with conservative counts. Counts are None when the model
+    has no matching elements at all (so rules report "未检查" instead of
+    "0 = violation"), and integers when we found relevant elements.
+    """
+    elevators = []
     for e in m.by_type("IfcTransportElement"):
-        pt = getattr(e, "PredefinedType", None)
+        pt = (getattr(e, "PredefinedType", None) or "").upper()
         nm = (e.Name or "").lower()
-        if pt == "ELEVATOR" or any(k in nm for k in ("lift", "elevator", "电梯")):
-            elev += 1
+        if pt == "ELEVATOR" or pt == "LIFT" or any(k in nm for k in _ELEV_KEYS):
+            elevators.append(e)
+    fire_elev = sum(1 for e in elevators
+                    if any(k in (e.Name or "").lower() for k in _FIRE_ELEV_KEYS))
+    access_elev = sum(1 for e in elevators
+                      if any(k in (e.Name or "").lower() for k in _ACCESS_ELEV_KEYS))
+
     ext = 0
     for e in m.by_type("IfcFurnishingElement"):
         nm = (e.Name or "").lower()
-        if "exting" in nm or "灭火" in (e.Name or ""):
+        if any(k in nm for k in _EXTING_KEYS) or "灭火" in (e.Name or ""):
             ext += 1
-    return elev, ext
+
+    parking = 0
+    access_parking = 0
+    for e in list(m.by_type("IfcSpace")) + list(m.by_type("IfcBuildingElementProxy")):
+        nm = (e.Name or "").lower()
+        if any(k in nm for k in _PARKING_KEYS):
+            parking += 1
+            if any(k in nm for k in _ACCESS_PARK_KEYS):
+                access_parking += 1
+
+    return {
+        "elevator_count": len(elevators) if elevators else None,
+        "fire_elevator_count": fire_elev if elevators else None,
+        "accessible_elevator_count": access_elev if access_elev > 0 else (
+            0 if elevators else None),
+        "fire_extinguisher_count": ext or None,
+        "parking_count": parking or None,
+        "accessible_parking_count": access_parking or None,
+    }
+
+
+_BLD_PARAM_KEYS = (
+    "occupancy_type", "ground_floor_exit_width_m", "fire_pool_volume_m3",
+    "transformer_capacity_kw", "emergency_power_duration_min",
+    "fire_extinguisher_count", "has_sprinkler_system", "has_fire_alarm",
+)
+
+
+def _declared_building_params(m):
+    """Whole-building design values the model actually declares.
+
+    Reads the named properties from the building-level pset(s) on the spatial
+    root (IfcProject / IfcSite / IfcBuilding). Only keys the model really
+    carries are returned — a model that omits them yields an empty dict, so the
+    whole-building rules report 未检查(缺字段) instead of judging a fabricated
+    default (the historic bug where BLD-001/002/003/004/007 fired on the
+    hard-coded 2.4 / 160 / 650 / 60 for every building).
+    """
+    declared = {}
+    hosts = []
+    for _t in ("IfcProject", "IfcSite", "IfcBuilding"):
+        hosts.extend(m.by_type(_t))
+    for e in hosts:
+        for k in _BLD_PARAM_KEYS:
+            if k in declared:
+                continue
+            v = _any_pset_value(e, k)
+            if v is not None:
+                declared[k] = v
+    return declared
 
 
 def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, hull=None,
@@ -2065,15 +2383,13 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
         ys = [p[1] for p in hull]
         corridor_width = round(min(max(xs) - min(xs), max(ys) - min(ys)), 3)
 
-    return {
+    _ret = {
         "id": space.GlobalId or name,
         "name": name,
         "type": rtype,
         "room_area_sqm": round(area, 1) if area is not None else None,
         "exit_count": exit_count,
         "door_width_m": door_width,
-        "has_emergency_light": bool(light) if light is not None
-            else (rtype not in ("Stairwell", "Corridor", "Vestibule")),
         "dist_to_water_m": float(water) if water is not None else 5.0,
         "circuit_load_a": float(circuit) if circuit is not None else 10,
         "outlet_spacing_m": float(outlet) if outlet is not None else 5.0,
@@ -2084,9 +2400,17 @@ def _space_to_room(space, area, ref="", door_widths=None, travel_distance=None, 
         "has_sprinkler": has_sprinkler,
         "hull": hull,
     }
+    # Emergency-light presence is only asserted when the model declares it;
+    # otherwise the key is omitted so CIVIL-006 reports 未检查(缺字段) instead of
+    # flagging a fabricated default (the old heuristic marked every Stairwell /
+    # Corridor as non-compliant purely from its room type).
+    if light is not None:
+        _ret["has_emergency_light"] = bool(light)
+    return _ret
 
 
-def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
+def parse_model(m, path, max_floors=None, max_rooms_per_floor=None,
+                force_plan=False):
     """Extract a structural report dict from an already-opened IFC model.
 
     Parameters
@@ -2341,7 +2665,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
     # (e.g. Institute-Building: 809 total but only 442 plan-worthy).
     total_phys = sum(1 for els in by_storey.values()
                      for e in els if _plan_element_kind(e))
-    extract_plan = total_phys <= 600
+    extract_plan = force_plan or total_phys <= 600
 
     floors = []
     for storey in storeys:
@@ -2350,6 +2674,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         types = {}
         storey_door_widths = []
         ramp_slopes = []
+        ramp_widths = []
         for e in els + wdw_fb:
             types[e.is_a()] = types.get(e.is_a(), 0) + 1
             if e.is_a("IfcDoor"):
@@ -2360,10 +2685,14 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 s = _ramp_slope(e, scale)
                 if s is not None:
                     ramp_slopes.append(s)
+                rw = _ramp_width(e, scale)
+                if rw is not None:
+                    ramp_widths.append(rw)
         # Structural elements (with z-fallback for uncontained columns/beams/slabs)
         all_struct_els = els + structural_fallback.get(storey.GlobalId, [])
         elements, col_sec, beam_sec, slab_th, unit_suspicious = _structural_sections(
-            all_struct_els, geom_settings, scale, profile_scale_for_extract)
+            all_struct_els, geom_settings, scale, profile_scale_for_extract,
+            declared_scale)
 
         plan_elems = _plan_elements(els + wdw_fb, geom_settings) if extract_plan else []
 
@@ -2522,6 +2851,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
                 "stairs": types.get("IfcStair", 0),
                 "ramps": types.get("IfcRamp", 0) + types.get("IfcRampFlight", 0),
                 "ramp_slopes": sorted(ramp_slopes),
+                "ramp_widths": sorted(ramp_widths),
                 "railings": len(railing_elems),
                 "railing_heights": sorted(railing_heights),
                 "sanitary_fixtures": types.get("IfcSanitaryTerminal", 0),
@@ -2547,7 +2877,7 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         })
 
     footprint = max((f["footprint_area_sqm"] for f in floors), default=0.0)
-    fire_elevators, fire_extinguishers = _building_fire_stats(m)
+    bstats = _building_stats(m)
     return {
         "source": "ifc",
         "file_name": Path(path).name,
@@ -2555,8 +2885,10 @@ def parse_model(m, path, max_floors=None, max_rooms_per_floor=None):
         "storey_count": len(floors),
         "building_footprint_area_sqm": footprint,
         "total_rooms": sum(len(f["rooms"]) for f in floors),
-        "building_fire_stats": {"fire_elevators": fire_elevators,
-                                "fire_extinguishers": fire_extinguishers},
+        "building_fire_stats": {"fire_elevators": bstats["fire_elevator_count"],
+                                "fire_extinguishers": bstats["fire_extinguisher_count"]},
+        "building_stats": bstats,
+        "declared_building_params": _declared_building_params(m),
         "scale_info": {
             "world_scale": scale,
             "declared_scale": declared_scale,
@@ -2604,26 +2936,52 @@ def build_review_data(struct, rooms_template=None, floor_room_map=None):
         })
     all_ramp_slopes = [s for f in struct.get("floors", [])
                        for s in (f.get("structure") or {}).get("ramp_slopes", [])]
-    stats = struct.get("building_fire_stats") or {}
-    any_fire_pipe = any(p.get("pipe_type") == "fire"
-                        for f in struct.get("floors", []) for p in f.get("pipes", []))
+    all_ramp_widths = [w for f in struct.get("floors", [])
+                       for w in (f.get("structure") or {}).get("ramp_widths", [])]
+    stats = struct.get("building_stats") or struct.get("building_fire_stats") or {}
+    _all_pipes = [p for f in struct.get("floors", []) for p in f.get("pipes", [])]
+    _all_elec = [el for f in struct.get("floors", []) for el in f.get("electrical_elements", [])]
+    any_fire_pipe = any(p.get("pipe_type") == "fire" for p in _all_pipes)
     any_fire_alarm = any(
         any(k in (el.get("name") or "").lower() for k in ("alarm", "smoke", "感烟", "报警"))
-        for f in struct.get("floors", []) for el in f.get("electrical_elements", []))
-    bp = {
-        "total_floors": struct.get("storey_count", len(floors)),
-        "occupancy_type": "office",
-        "ground_floor_exit_width_m": 2.4,
-        "fire_pool_volume_m3": 160.0,
-        "transformer_capacity_kw": 650.0,
-        "emergency_power_duration_min": 60.0,
-        "fire_elevator_count": stats.get("fire_elevators", 0),
-        "fire_extinguisher_count": stats.get("fire_extinguishers", 0),
-        "has_sprinkler_system": any_fire_pipe,
-        "has_fire_alarm": any_fire_alarm,
-    }
+        for el in _all_elec)
+    bp = {"total_floors": struct.get("storey_count", len(floors))}
+    # Elevator / extinguisher counts are only asserted when the model actually
+    # contains eligible elements (None = "nothing to count", not "zero").
+    if stats.get("fire_elevator_count") is not None:
+        bp["fire_elevator_count"] = stats["fire_elevator_count"]
+    if stats.get("fire_extinguisher_count") is not None:
+        bp["fire_extinguisher_count"] = stats["fire_extinguisher_count"]
+    # Presence checks are meaningful only when the model carries the relevant
+    # discipline at all; a building with no MEP / electrical model cannot be
+    # said to "lack" sprinklers or an alarm, so those keys are omitted (→
+    # 未检查) rather than fabricated as False (→ phantom BLD-008/BLD-009).
+    if _all_pipes:
+        bp["has_sprinkler_system"] = any_fire_pipe
+    if _all_elec:
+        bp["has_fire_alarm"] = any_fire_alarm
+    # Whole-building design values are judged ONLY when the model declares them.
+    # The old code hard-coded 2.4 / 160 / 650 / 60 + "office" for every building,
+    # which made BLD-001/002/003/004 (and the extinguisher count) fire on
+    # fabricated numbers regardless of the actual design. Now those keys are
+    # added only when the IFC carries them; otherwise the rule honestly reports
+    # 未检查(缺字段) instead of a phantom violation.
+    for _k, _v in (struct.get("declared_building_params") or {}).items():
+        if _k in _BLD_PARAM_KEYS and _v is not None:
+            bp[_k] = _v
     if all_ramp_slopes:
         bp["max_ramp_slope"] = max(all_ramp_slopes)
+    if all_ramp_widths:
+        bp["accessible_ramp_width_m"] = min(all_ramp_widths)
+    # accessibility — set each key only when the model actually declares
+    # something. Omitted keys surface as "未检查（缺字段）"; setting them to None
+    # would instead count as a null judgement (a false field-coverage hit).
+    _toilets = _count_accessible_toilets(struct, floors)
+    for _k, _v in (("accessible_elevator_count", stats.get("accessible_elevator_count")),
+                   ("accessible_parking_count", stats.get("accessible_parking_count")),
+                   ("accessible_toilet_count", _toilets)):
+        if _v is not None:
+            bp[_k] = _v
     return {
         "project_name": struct.get("project_name") or "BIM Building",
         "source": "ifc",

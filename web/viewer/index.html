@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ArchCheck · 3D Viewer (That Open Engine)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden;
+      font-family: "Microsoft YaHei","PingFang SC",Inter,system-ui,sans-serif;
+      background: #1a1f2b; color: #e8eef7; }
+    #app { position: relative; width: 100vw; height: 100vh; }
+    #viewer { width: 100%; height: 100%; }
+    .topbar { position: absolute; top: 0; left: 0; right: 0; height: 48px;
+      display: flex; align-items: center; padding: 0 20px; gap: 16px;
+      background: rgba(20, 24, 34, .85); backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255,255,255,.06); z-index: 10; }
+    .topbar h1 { font-size: 14px; font-weight: 600; letter-spacing: .3px; }
+    .topbar .sub { font-size: 12px; color: #8fa1bb; }
+    .topbar .spacer { flex: 1; }
+    .file-btn { padding: 7px 14px; font-size: 12px; background: #2563eb;
+      color: #fff; border: 0; border-radius: 5px; cursor: pointer; font-weight: 500; }
+    .file-btn:hover { background: #1d4ed8; }
+    .file-btn input { display: none; }
+    .tool-btn { padding: 6px 12px; font-size: 12px; background: rgba(255,255,255,.08);
+      color: #e8eef7; border: 1px solid rgba(255,255,255,.12);
+      border-radius: 5px; cursor: pointer; font-weight: 500; }
+    .tool-btn:hover { background: rgba(255,255,255,.14); }
+    .violation-stat { font-size: 11.5px; color: #f87171; }
+    .floor-bar { position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 4px; padding: 4px;
+      background: rgba(20, 24, 34, .85); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 6px;
+      z-index: 10; }
+    .floor-btn { padding: 4px 12px; font-size: 11.5px; background: transparent;
+      color: #8fa1bb; border: 0; border-radius: 4px; cursor: pointer;
+      font-weight: 500; white-space: nowrap; }
+    .floor-btn:hover { background: rgba(255,255,255,.08); color: #e8eef7; }
+    .floor-btn.active { background: #2563eb; color: #fff; }
+    .view-bar { position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 4px; padding: 4px;
+      background: rgba(20, 24, 34, .85); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 6px;
+      z-index: 10; }
+    .view-btn { padding: 4px 12px; font-size: 11.5px; background: transparent;
+      color: #8fa1bb; border: 0; border-radius: 4px; cursor: pointer;
+      font-weight: 500; white-space: nowrap; }
+    .view-btn:hover { background: rgba(255,255,255,.08); color: #e8eef7; }
+    .view-btn.active { background: #7c3aed; color: #fff; }
+    .nav-bar { position: absolute; top: 134px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+      background: rgba(20, 24, 34, .85); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 6px;
+      z-index: 10; }
+    .nav-bar select { font-size: 11.5px; color: #e8eef7; background: #20263a;
+      border: 1px solid rgba(255,255,255,.14); border-radius: 4px;
+      padding: 4px 6px; max-width: 190px; cursor: pointer; outline: none; }
+    .nav-bar select:disabled { opacity: .4; cursor: default; }
+    .nav-btn { padding: 5px 11px; font-size: 11.5px; background: #0e7490;
+      color: #fff; border: 0; border-radius: 4px; cursor: pointer;
+      font-weight: 600; white-space: nowrap; }
+    .nav-btn:hover { background: #0e647d; }
+    .nav-btn.ghost { background: rgba(255,255,255,.08); color: #e8eef7;
+      border: 1px solid rgba(255,255,255,.12); }
+    .nav-btn.ghost:hover { background: rgba(255,255,255,.14); }
+    .nav-sep { width: 1px; height: 20px; background: rgba(255,255,255,.12); }
+    .status { position: absolute; bottom: 14px; left: 20px; z-index: 10;
+      font-size: 12px; color: #8fa1bb; background: rgba(20,24,34,.7);
+      padding: 6px 12px; border-radius: 5px; }
+    .info-panel { position: absolute; top: 60px; right: 16px; width: 280px;
+      background: rgba(26,31,43,.92); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 8px;
+      padding: 14px; font-size: 12.5px; z-index: 10; display: none; }
+    .info-panel h3 { font-size: 13px; margin-bottom: 8px; color: #f0f5fb; }
+    .info-panel .kv { display: grid; grid-template-columns: 72px 1fr; gap: 5px 10px; margin-top: 6px; }
+    .info-panel .k { color: #8fa1bb; }
+    .info-panel .v { word-break: break-all; font-family: Consolas, monospace; font-size: 11.5px; }
+    .hover-tip { position: fixed; z-index: 40; display: none; pointer-events: none;
+      padding: 7px 10px; border-radius: 6px; background: rgba(20,24,34,.94);
+      border: 1px solid rgba(255,255,255,.14); color: #e8eef7; font-size: 12px;
+      line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.4); max-width: 240px; }
+    .hint { position: absolute; top: 60px; left: 20px; z-index: 10;
+      font-size: 11.5px; color: #8fa1bb; line-height: 1.6;
+      background: rgba(20,24,34,.7); padding: 8px 12px; border-radius: 5px; max-width: 260px; }
+  </style>
+  <script type="module" crossorigin src="/viewer/assets/index-yxPpnmAQ.js"></script>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <h1>ArchCheck 3D Viewer</h1>
+    <span class="sub" data-i18n="sub">That Open Engine (web-ifc-viewer) · 三维审查原型</span>
+    <span class="violation-stat" id="violation-stat"></span>
+    <div class="spacer"></div>
+    <button class="tool-btn" id="toggle-violations" data-i18n="hide_issues">🔴 隐藏违规</button>
+    <label class="file-btn">
+      <span data-i18n="open_ifc">打开 IFC 文件</span>
+      <input type="file" id="file-input" accept=".ifc" />
+    </label>
+  </div>
+  <div class="floor-bar" id="floor-bar" style="display:none;">
+    <button class="floor-btn active" id="floor-all" data-i18n="all">全部</button>
+  </div>
+  <div class="view-bar" id="view-bar" style="display:none;">
+    <button class="view-btn active" data-mode="all" data-i18n="view_full">🌐 全景</button>
+    <button class="view-btn" data-mode="section" data-i18n="view_section">✂️ 剖切</button>
+    <button class="view-btn" data-mode="isolate" data-i18n="view_isolate">🎯 隔离</button>
+  </div>
+  <div class="nav-bar" id="nav-bar" style="display:none;">
+    <select id="nav-floor" title="选择楼层"></select>
+    <select id="nav-room" disabled title="选择房间"></select>
+    <button class="nav-btn" id="nav-enter" data-i18n="nav_enter">🚪 进入房间</button>
+    <span class="nav-sep"></span>
+    <button class="nav-btn ghost" id="nav-home" data-i18n="nav_home">🔙 全景</button>
+  </div>
+  <div class="hint" data-i18n-html="hint">
+    鼠标左键：旋转<br/>
+    鼠标右键：平移<br/>
+    滚轮：缩放<br/>
+    悬停构件：显示尺寸<br/>
+    单击构件：显示信息
+  </div>
+  <div id="viewer"></div>
+  <div class="hover-tip" id="hover-tip"></div>
+  <div class="status" id="status" data-i18n="status_wait">等待加载模型…</div>
+  <div class="info-panel" id="info-panel">
+    <h3 data-i18n="info_title">构件信息</h3>
+    <div class="kv">
+      <div class="k" data-i18n="k_name">名称</div><div class="v" id="info-name">—</div>
+      <div class="k" data-i18n="k_type">IFC 类型</div><div class="v" id="info-type">—</div>
+      <div class="k" data-i18n="k_floor">楼层</div><div class="v" id="info-floor">—</div>
+      <div class="k" data-i18n="k_dims">尺寸 (m)</div><div class="v" id="info-dims">—</div>
+      <div class="k" data-i18n="k_material">材料</div><div class="v" id="info-material">—</div>
+      <div class="k" data-i18n="k_gid">GlobalId</div><div class="v" id="info-gid">—</div>
+    </div>
+    <div id="info-issues-wrap" style="display:none;margin-top:10px;
+         border-top:1px solid rgba(255,255,255,.08);padding-top:8px;">
+      <div style="font-size:12px;color:#f87171;font-weight:600;margin-bottom:5px;">
+        <span data-i18n="issues_title">⚠️ 触发的审查规则</span> <span id="info-issues-n"></span>
+      </div>
+      <div id="info-issues"></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

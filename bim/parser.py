@@ -10,14 +10,17 @@ from bim.extractor import parse_model, build_review_data, available
 from bim.qa_validator import validate_model
 
 
-def parse_ifc(path, max_floors=None, max_rooms_per_floor=None):
+def parse_ifc(path, max_floors=None, max_rooms_per_floor=None, force_plan=False):
     """Open an IFC, extract its structure, and attach a model-usability QA report.
 
     Returns the same structure dict as before plus a ``qa`` key:
     ``{score, fatal, checks, stats}`` (see bim/qa_validator.validate_model).
+
+    ``force_plan=True`` bypasses the 600-element plan-extraction performance
+    gate (used by offline crosscheck, never in the interactive web path).
     """
     m = ifcopenshell.open(str(path))
-    struct = parse_model(m, path, max_floors, max_rooms_per_floor)
+    struct = parse_model(m, path, max_floors, max_rooms_per_floor, force_plan)
     struct["qa"] = validate_model(m, struct)
     return struct
 

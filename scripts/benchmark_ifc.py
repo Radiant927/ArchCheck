@@ -48,11 +48,16 @@ BUCKETS = [
     ("window", ["IfcWindow"], "windows"),
     ("column", ["IfcColumn"], "columns"),
     ("beam",   ["IfcBeam"], "beams"),
-    ("slab",   ["IfcSlab"], "slabs"),
-    ("stair",  ["IfcStair"], "stairs"),
-    ("pipe",   ["IfcPipeSegment"], "pipes"),
+    ("slab",    ["IfcSlab"], "slabs"),
+    ("footing", ["IfcFooting"], "footings"),
+    ("stair",   ["IfcStair"], "stairs"),
+    ("railing", ["IfcRailing"], "railings"),
+    ("pipe",    ["IfcPipeSegment"], "pipes"),
     ("pipe_fitting", ["IfcPipeFitting"], "pipe_fittings"),
     ("duct",   ["IfcDuctSegment"], "ducts"),
+    ("sanitary", ["IfcSanitaryTerminal"], "sanitary_fixtures"),
+    ("air_terminal", ["IfcAirTerminal"], "air_terminals"),
+    ("outlet", ["IfcOutlet"], "outlets"),
 ]
 
 
@@ -87,6 +92,17 @@ def _plausible_share(values, lo, hi):
     if not values:
         return None
     return sum(1 for v in values if v is not None and lo <= v <= hi) / len(values)
+
+
+def _plausible_many(checks):
+    """Aggregate a list of (plausible_share_or_None) across measurement kinds.
+    Only kinds that actually produced samples count toward the mean — a model
+    with no pipes is not punished for its lack of pipes, but its real
+    measurements (room area, door widths…) still are."""
+    shares = [c for c in checks if c is not None]
+    if not shares:
+        return None
+    return sum(shares) / len(shares)
 
 
 # ===================================================================== axes ==
@@ -131,21 +147,54 @@ def axis_field_coverage(tally):
 
 
 def axis_accuracy(struct):
-    """D. Sanity proxy: extracted dimensions fall in real-world ranges."""
-    marks = []
+    """D. Sanity proxy: extracted dimensions fall in real-world ranges.
+
+    Scored per *measurement kind present in the model*, across disciplines —
+    building (room area / door width / corridor length), structural (column
+    section / slab thickness), MEP (pipe diameter / duct section). A model is
+    only judged on the kinds it actually carries, so a residential file with no
+    pipes is not docked for missing them while its real measurements still count.
+    """
+    # collect samples per measurement kind
+    kinds = {}  # kind -> list of 0/1 plausibility flags
+
+    def add(kind, flags):
+        kinds.setdefault(kind, []).extend(flags)
+
     for f in struct.get("floors", []):
-        pipes = f.get("pipes", [])
-        dia = _plausible_share([p.get("diameter_m") for p in pipes], 0.005, 2.0)
-        if dia is not None:
-            marks.append(dia)
+        # --- building ---
+        for r in f.get("rooms", []):
+            a = r.get("room_area_sqm")
+            if a is not None:
+                add("room_area", [1.0 if 1.0 <= a <= 5000 else 0.0])
+        door_ws = f.get("structure", {}).get("door_widths_m", [])
+        for w in door_ws:
+            add("door_width", [1.0 if 0.5 <= w <= 3.0 else 0.0])
+        # --- structural ---
+        for (mn, mx) in f.get("structure", {}).get("column_sections", []):
+            add("column_section", [1.0 if 0.05 <= min(mn, mx) <= 3.0 else 0.0])
+        for th in f.get("structure", {}).get("slab_thicknesses", []):
+            add("slab_thickness", [1.0 if 0.05 <= th <= 1.0 else 0.0])
+        for rh in f.get("structure", {}).get("railing_heights", []):
+            add("railing_height", [1.0 if 0.3 <= rh <= 2.0 else 0.0])
+        # --- MEP ---
+        for p in f.get("pipes", []):
+            d = p.get("diameter_m")
+            if d is not None:
+                add("pipe_diameter", [1.0 if 0.005 <= d <= 2.0 else 0.0])
         for d in f.get("ducts", []):
             if d.get("duct_width_m"):
-                marks.append(1.0 if 0.03 <= d["duct_width_m"] <= 4.0 else 0.0)
+                add("duct_width", [1.0 if 0.03 <= d["duct_width_m"] <= 4.0 else 0.0])
             if d.get("duct_height_m"):
-                marks.append(1.0 if 0.02 <= d["duct_height_m"] <= 4.0 else 0.0)
-    if not marks:
-        return 50.0, "no measurable dimensions", None
-    return sum(marks) / len(marks) * 100.0, f"{sum(marks):.0f}/{len(marks)} plausible", None
+                add("duct_height", [1.0 if 0.02 <= d["duct_height_m"] <= 4.0 else 0.0])
+
+    if not kinds:
+        return 50.0, "no measurable dimensions in model", None
+    per_kind = {k: sum(v) / len(v) for k, v in kinds.items()}
+    score = sum(per_kind.values()) / len(per_kind) * 100.0
+    n_measured = sum(len(v) for v in kinds.values())
+    detail = "; ".join(f"{k}={s:.0%}" for k, s in sorted(per_kind.items()))
+    return score, f"{detail} ({n_measured} measured)", per_kind
 
 
 def axis_rule_activation(tally, rules, struct):

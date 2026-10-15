@@ -1,0 +1,18 @@
+parsing…
+reviewing…
+all_issues: 400  aggregated cards: 10
+severity: {'Missing': 280, 'High': 64, 'Medium': 19, 'Low': 37}
+type: {'civil': 157, 'building': 1, 'structural': 12, 'accessibility': 230}
+wrote C:\Users\32800\Desktop\NTU pre\ArchCheck\presentation\2026-10-20\_hitos_review\all_issues.json and aggregated.json
+
+== 聚合卡片（Top 20 by 数量）==
+  [Missing ] ACC-003    n= 229  无障碍走廊净宽检查
+  [Low     ] CIVIL-004  n=  88  疏散门净宽检查
+  [High    ] CIVIL-007  n=  51  房间疏散出口数量下限检查
+  [Medium  ] STR-001    n=  12  柱最小截面尺寸检查
+  [High    ] CIVIL-001  n=   8  疏散距离检查
+  [Medium  ] CIVIL-003  n=   5  安全出口数量检查
+  [High    ] CIVIL-005  n=   4  大房间疏散出口数量检查
+  [High    ] CIVIL-012  n=   1  房间最远点疏散距离检查
+  [Medium  ] BLD-005    n=   1  无障碍坡道坡度检查
+  [Medium  ] ACC-004    n=   1  无障碍电梯检查

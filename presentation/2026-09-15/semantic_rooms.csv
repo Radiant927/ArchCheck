@@ -1,0 +1,22 @@
+﻿name,gold,before_keyword,after_keyword_plus_AI,correct_after,changed,harmful_guess
+Office 201,Office,Office,Office,1,0,0
+会议室 A,Meeting Room,Meeting Room,Meeting Room,1,0,0
+Meeting Room 2,Meeting Room,Meeting Room,Meeting Room,1,0,0
+Schulungsraum,Meeting Room,Unknown,Unknown,0,0,0
+Flur,Corridor,Corridor,Corridor,1,0,0
+Corridor East,Corridor,Corridor,Corridor,1,0,0
+Treppenhaus,Stairwell,Stairwell,Stairwell,1,0,0
+WC Herren,Vestibule,Vestibule,Vestibule,1,0,0
+Serverraum,Equipment Room,Unknown,Equipment Room,1,1,0
+Elektroverteilung,Equipment Room,Unknown,Equipment Room,1,1,0
+Putzmittelraum,Equipment Room,Unknown,Unknown,0,0,0
+101,Unknown,Unknown,Unknown,1,0,0
+A102,Unknown,Unknown,Unknown,1,0,0
+2.03,Unknown,Unknown,Unknown,1,0,0
+70.001,Unknown,Unknown,Unknown,1,0,0
+Lager,Unknown,Unknown,Unknown,1,0,0
+Archiv,Unknown,Unknown,Unknown,1,0,0
+Empfang,Unknown,Unknown,Unknown,1,0,0
+living room,Unknown,Unknown,Unknown,1,0,0
+Bedroom,Unknown,Unknown,Unknown,1,0,0
+Kueche,Unknown,Unknown,Unknown,1,0,0

@@ -668,3 +668,694 @@ def generate_building_section(floors, civil_r, eee_r, building_r, conflicts):
 
     return img
 
+
+# ---------------------------------------------------------------- crosscheck ----
+
+CROSSCHECK_COLORS = {
+    "pass":    (46, 139, 87),     # ✓ 绿
+    "fail":    (211, 47, 47),     # ✗ 红
+    "missing": (255, 140, 0),     # 漏 橙
+    "extra":   (142, 107, 191),   # 多 紫
+    "default": (176, 182, 190),   # 未参与比对 灰
+}
+
+_VERDICT_RANK = {"✗": 3, "漏": 2, "多": 2, "✓": 1}
+
+
+def _aggregate_verdict(field_rows):
+    """Worst verdict across a component's fields (✗ beats 漏 beats ✓)."""
+    if not field_rows:
+        return None
+    return max(field_rows, key=lambda v: _VERDICT_RANK.get(v, 0))
+
+
+def _dashed_rect(draw, box, color, width=3, dash=10):
+    x0, y0, x1, y1 = box
+    for x in range(int(x0), int(x1), dash * 2):
+        draw.line([x, y0, min(x + dash, x1), y0], fill=color, width=width)
+        draw.line([x, y1, min(x + dash, x1), y1], fill=color, width=width)
+    for y in range(int(y0), int(y1), dash * 2):
+        draw.line([x0, y, x0, min(y + dash, y1)], fill=color, width=width)
+        draw.line([x1, y, x1, min(y + dash, y1)], fill=color, width=width)
+
+
+def _compute_plan_transform(rooms, plan_elements, W=1800, H=1200,
+                                dx1=60, dy1=110, dx2=None, dy2=None):
+    """Compute (minx, miny, scale, ox, oy) so model coords map to pixel coords.
+
+    Pixel formula: px = ox + (mx - minx) * scale
+    Matches the layout used by ``render_room_plan`` for real-geometry plans.
+    Falls back to plan_elements bbox if no room hulls available.
+    Returns None if neither rooms nor plan_elements have real geometry.
+    """
+    if dx2 is None:
+        dx2 = W - 670
+    if dy2 is None:
+        dy2 = H - 150
+    aw, ah = dx2 - dx1, dy2 - dy1
+
+    has_rooms = bool(rooms and all(r.get("hull") for r in rooms))
+    has_plan = bool(plan_elements)
+
+    if not has_rooms and not has_plan:
+        return None
+
+    pts = []
+    if has_rooms:
+        for r in rooms:
+            for x, y in r["hull"]:
+                pts.append((x, y))
+    if has_plan:
+        for el in plan_elements:
+            x0, y0, x1, y1 = el["bbox"][:4]
+            pts += [(x0, y0), (x1, y1)]
+    if not pts:
+        return None
+
+    pts = [p for r in rooms for p in r["hull"]]
+    for el in (plan_elements or []):
+        x0, y0, x1, y1 = el["bbox"][:4]
+        pts += [(x0, y0), (x1, y1)]
+    if not pts:
+        return None
+    minx = min(p[0] for p in pts)
+    maxx = max(p[0] for p in pts)
+    miny = min(p[1] for p in pts)
+    maxy = max(p[1] for p in pts)
+    spanx = max(maxx - minx, 1e-6)
+    spany = max(maxy - miny, 1e-6)
+    scale = min((aw - 40) / spanx, (ah - 40) / spany)
+    ox = dx1 + (aw - spanx * scale) / 2
+    oy = dy1 + (ah - spany * scale) / 2
+    return {"minx": minx, "miny": miny, "scale": scale,
+            "ox": ox, "oy": oy, "W": W, "H": H,
+            "dx1": dx1, "dy1": dy1, "dx2": dx2, "dy2": dy2}
+
+
+def _to_px(mx, my, t):
+    """Model coords -> pixel coords using transform t."""
+    return (t["ox"] + (mx - t["minx"]) * t["scale"],
+            t["oy"] + (my - t["miny"]) * t["scale"])
+
+
+def _bbox_to_px(bbox, t):
+    """Model bbox (x0,y0,x1,y1) -> pixel bbox (px0,py0,px1,py1)."""
+    x0, y0, x1, y1 = bbox[:4]
+    px0, py0 = _to_px(x0, y0, t)
+    px1, py1 = _to_px(x1, y1, t)
+    return (px0, py0, px1, py1)
+
+
+def _render_elements_only_plan(plan_elements, floor_name="", W=1800, H=1200):
+    """Render a plan image with only physical elements (no rooms).
+
+    Used when the model has no room spaces (e.g. pure MEP / structural
+    models). Returns (PIL image, transform_dict).
+    """
+    img = Image.new("RGB", (W, H), (250, 251, 252))
+    draw = ImageDraw.Draw(img)
+    ft, fm, fs = _load_fonts((36, 28, 22))
+
+    title = f"楼层平面图  —  {_floor_label(floor_name)}" if floor_name else "楼层平面图"
+    draw.rectangle([0, 0, W, 70], fill=(30, 35, 45))
+    draw.text((40, 12), title, fill=(240, 245, 250), font=ft)
+
+    t = _compute_plan_transform([], plan_elements, W=W, H=H,
+                                dx1=60, dy1=110, dx2=W-60, dy2=H-150)
+    if t and plan_elements:
+        _draw_plan_elements(draw, plan_elements,
+                            t["minx"], t["miny"], t["scale"], t["ox"], t["oy"])
+    return img, t
+
+
+def build_image_overlay_plan(rooms, plan_elements=None, floor_name="",
+                             issues=None, verdict_map=None):
+    """Interactive floor plan: Pillow-rendered base image + plotly hotspots.
+
+    The visual quality is the same as the static plan (professional
+    architectural style), and clicking/hovering hits transparent plotly
+    shapes laid on top at matching pixel positions.
+
+    Returns a plotly.graph_objects.Figure.
+    """
+    import plotly.graph_objects as go
+    import base64
+    import io
+
+    has_rooms = bool(rooms and all(r.get("hull") for r in rooms))
+
+    # 1. Render the high-quality base image
+    if has_rooms:
+        base_img, room_map = render_room_plan(rooms, floor_name, plan_elements)
+    else:
+        base_img, _ = _render_elements_only_plan(plan_elements, floor_name)
+
+    # 2. Compute pixel transform (same as render_room_plan uses internally)
+    t = _compute_plan_transform(rooms, plan_elements)
+    if t is None:
+        # No geometry at all — just show the placeholder image
+        buf = io.BytesIO()
+        base_img.save(buf, format="PNG")
+        buf.seek(0)
+        img_b64 = base64.b64encode(buf.read()).decode()
+        fig = go.Figure()
+        fig.add_layout_image(
+            dict(source=f"data:image/png;base64,{img_b64}",
+                 x=0, y=base_img.height,
+                 xref="x", yref="y",
+                 sizex=base_img.width, sizey=base_img.height,
+                 sizing="stretch", layer="below")
+        )
+        fig.update_layout(
+            xaxis=dict(scaleanchor="y", scaleratio=1,
+                       range=[0, base_img.width], showgrid=False,
+                       zeroline=False, showticklabels=False),
+            yaxis=dict(range=[0, base_img.height], showgrid=False,
+                       zeroline=False, showticklabels=False),
+            margin=dict(l=0, r=0, t=0, b=0),
+            height=500, plot_bgcolor="white", paper_bgcolor="white",
+        )
+        return fig
+
+    W, H = t["W"], t["H"]
+
+    # 3. Build pixel-coord hotspots
+    room_issue_map = {}
+    if issues:
+        for iss in issues:
+            loc = iss.get("location") or iss.get("room_name") or ""
+            sev = iss.get("severity", "info")
+            if loc and (not room_issue_map.get(loc) or sev == "high"):
+                room_issue_map[loc] = sev
+
+    all_xs = []
+    all_ys = []
+    all_text = []
+    all_custom = []
+
+    # Room hotspots (polygon fill, transparent, clickable)
+    for r in rooms:
+        hull = r.get("hull") or []
+        if not hull:
+            continue
+        name = r.get("name", "")
+        rtype = r.get("type", "Unknown")
+        rid = r.get("room_id") or r.get("id") or name
+        area = r.get("room_area_sqm")
+        sev = room_issue_map.get(name)
+
+        px_poly = [_to_px(x, y, t) for x, y in hull]
+        xs = [p[0] for p in px_poly] + [px_poly[0][0], None]
+        ys = [p[1] for p in px_poly] + [px_poly[0][1], None]
+
+        hover = f"<b>{name}</b><br>类型: {rtype}"
+        if area:
+            hover += f"<br>面积: {area:.1f} m²"
+        if sev:
+            hover += f"<br><span style='color:#d32f2f'><b>⚠️ {sev} 级问题</b></span>"
+
+        n = len(xs)
+        all_xs.extend(xs)
+        all_ys.extend(ys)
+        all_text.extend([hover] * n)
+        all_custom.extend([rid] * n)
+
+    # Plan element hotspots (rectangular bboxes)
+    for el in (plan_elements or []):
+        kind = el.get("kind", "unknown")
+        eid = el.get("id") or el.get("global_id") or ""
+        ename = el.get("name") or kind
+        verdict = verdict_map.get(eid) if verdict_map else None
+
+        px0, py0, px1, py1 = _bbox_to_px(el["bbox"], t)
+        # Expand thin elements so they're easier to click
+        dx = abs(px1 - px0)
+        dy = abs(py1 - py0)
+        pad = max(2.0, min(dx, dy) * 0.3)
+        if dx < pad * 2:
+            cx = (px0 + px1) / 2
+            px0, px1 = cx - pad, cx + pad
+        if dy < pad * 2:
+            cy = (py0 + py1) / 2
+            py0, py1 = cy - pad, cy + pad
+
+        xs = [px0, px1, px1, px0, px0, None]
+        ys = [py0, py0, py1, py1, py0, None]
+
+        h = f"<b>{ename}</b><br>类型: {kind}"
+        if verdict:
+            vcol = {"✓": "#2e8b57", "✗": "#d32f2f",
+                    "漏": "#ff8c00", "多": "#8e6bbf"}.get(verdict, "#888")
+            h += f"<br>互检: <span style='color:{vcol}'><b>{verdict}</b></span>"
+        if eid:
+            h += f"<br><span style='color:#888;font-size:11px;'>ID: {eid[:24]}…</span>"
+
+        n = len(xs)
+        all_xs.extend(xs)
+        all_ys.extend(ys)
+        all_text.extend([h] * n)
+        all_custom.extend([eid or f"{kind}_i"] * n)
+
+    # 4. Encode base image
+    buf = io.BytesIO()
+    base_img.save(buf, format="PNG")
+    buf.seek(0)
+    img_b64 = base64.b64encode(buf.read()).decode()
+
+    # 5. Build figure
+    fig = go.Figure()
+
+    # Transparent hotspot layer
+    fig.add_trace(go.Scatter(
+        x=all_xs, y=all_ys,
+        fill="toself",
+        fillcolor="rgba(0,0,0,0.001)",  # nearly transparent, but clickable
+        line=dict(width=0, color="rgba(0,0,0,0)"),
+        mode="lines",
+        name="hotspots",
+        text=all_text,
+        hoverinfo="text",
+        customdata=all_custom,
+        showlegend=False,
+        hoveron="fills",
+    ))
+
+    # Base image as layout background
+    fig.add_layout_image(
+        dict(
+            source=f"data:image/png;base64,{img_b64}",
+            x=0, y=H,
+            xref="x", yref="y",
+            sizex=W, sizey=H,
+            sizing="stretch",
+            layer="below",
+        )
+    )
+
+    fig.update_layout(
+        xaxis=dict(
+            scaleanchor="y", scaleratio=1,
+            range=[0, W],
+            showgrid=False, zeroline=False, showticklabels=False,
+            showline=False, fixedrange=False,
+        ),
+        yaxis=dict(
+            range=[0, H],
+            showgrid=False, zeroline=False, showticklabels=False,
+            showline=False, fixedrange=False,
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=520,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        hovermode="closest",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=12,
+            font_family="Inter, system-ui, sans-serif",
+            bordercolor="#e2e8f0",
+        ),
+        clickmode="event+select",
+        dragmode="zoom",
+    )
+
+    return fig
+
+
+def render_crosscheck_plan(rooms, plan_elements, verdict_map, floor_name="",
+                           subtitle=""):
+    """Floor plan with each physical element coloured by its crosscheck verdict.
+
+    ``verdict_map`` maps GlobalId -> {"verdict": "✓"/"✗"/"漏"/"多",
+    "fields": [(field, truth, extracted, verdict), ...]}. Elements with no
+    crosscheck row stay grey (not compared). Returns a PIL image.
+    """
+    W, H = 1800, 1200
+    img = Image.new("RGB", (W, H), (250, 251, 252))
+    draw = ImageDraw.Draw(img)
+    ft, fm, fs = _load_fonts((36, 28, 22))
+    head = "互检平面标注图" if i18n.LANG == "zh" else "CROSSCHECK PLAN"
+    title = f"{head}  —  {_floor_label(floor_name)}" if floor_name else head
+    if subtitle:
+        title += f"   ({subtitle})"
+    draw.rectangle([0, 0, W, 70], fill=(30, 35, 45))
+    draw.text((40, 12), title, fill=(240, 245, 250), font=ft)
+
+    dx1, dy1, dx2, dy2 = 60, 110, W - 60, H - 150
+    aw, ah = dx2 - dx1, dy2 - dy1
+
+    pts = [p for r in rooms for p in (r.get("hull") or [])]
+    for el in plan_elements:
+        x0, y0, x1, y1 = el["bbox"][:4]
+        pts += [(x0, y0), (x1, y0), (x0, y1), (x1, y1)]
+    if not pts:
+        draw.text((dx1, dy1 + 40),
+                  "无几何数据" if i18n.LANG == "zh" else "No geometry data",
+                  fill=(150, 155, 165), font=fm)
+        return img
+
+    minx = min(p[0] for p in pts); maxx = max(p[0] for p in pts)
+    miny = min(p[1] for p in pts); maxy = max(p[1] for p in pts)
+    spanx = max(maxx - minx, 1e-6); spany = max(maxy - miny, 1e-6)
+    scale = min((aw - 40) / spanx, (ah - 40) / spany)
+    ox = dx1 + (aw - spanx * scale) / 2
+    oy = dy1 + (ah - spany * scale) / 2
+
+    def tf(x, y):
+        return (ox + (x - minx) * scale, oy + (y - miny) * scale)
+
+    # 1) room footprints as light context
+    for r in rooms:
+        if not r.get("hull"):
+            continue
+        poly = [tf(x, y) for x, y in r["hull"]]
+        fill = ROOM_TYPE_FILL.get(r.get("type", "Unknown"), ROOM_TYPE_FILL["Unknown"])
+        draw.polygon(poly, fill=fill, outline=(205, 210, 218))
+        cx = int(sum(p[0] for p in poly) / len(poly))
+        cy = int(sum(p[1] for p in poly) / len(poly))
+        nm = str(r.get("name", ""))
+        nb = draw.textbbox((0, 0), nm, font=fs)
+        draw.text((cx - (nb[2] - nb[0]) // 2, cy - 8), nm, fill=(120, 128, 138), font=fs)
+
+    # 2) physical elements coloured by verdict (worst-first so ✗ draws on top)
+    counts = {"✓": 0, "✗": 0, "漏": 0, "多": 0, "—": 0}
+    label_queue = []
+    ordered = sorted(plan_elements,
+                     key=lambda el: _VERDICT_RANK.get(
+                         _aggregate_verdict([f[3] for f in
+                                             verdict_map.get(el.get("id"), {}).get("fields", [])]) or "", 0))
+    for el in ordered:
+        x0, y0, x1, y1 = el["bbox"][:4]
+        sx0, sy0 = tf(x0, y0); sx1, sy1 = tf(x1, y1)
+        info = verdict_map.get(el.get("id"))
+        v = _aggregate_verdict([f[3] for f in info["fields"]]) if info else None
+        if info is None or v is None:
+            col, width = CROSSCHECK_COLORS["default"], 2
+            counts["—"] += 1
+        elif v == "✓":
+            col, width = CROSSCHECK_COLORS["pass"], 3
+            counts["✓"] += 1
+        elif v == "✗":
+            col, width = CROSSCHECK_COLORS["fail"], 6
+            counts["✗"] += 1
+            label_queue.append((sx0, sy0, sx1, sy1, info))
+        elif v == "漏":
+            col, width = CROSSCHECK_COLORS["missing"], 5
+            counts["漏"] += 1
+            label_queue.append((sx0, sy0, sx1, sy1, info))
+        else:
+            col, width = CROSSCHECK_COLORS["extra"], 4
+            counts["多"] += 1
+        kind = el["kind"]
+        if kind == "window":
+            if abs(sx1 - sx0) >= abs(sy1 - sy0):
+                draw.line([sx0, (sy0 + sy1) / 2, sx1, (sy0 + sy1) / 2], fill=col, width=width)
+            else:
+                draw.line([(sx0 + sx1) / 2, sy0, (sx0 + sx1) / 2, sy1], fill=col, width=width)
+        elif kind == "column":
+            draw.ellipse([sx0, sy0, sx1, sy1], outline=col, width=width)
+        elif v == "漏":
+            _dashed_rect(draw, (sx0, sy0, sx1, sy1), col, width=3)
+        else:
+            draw.rectangle([sx0, sy0, sx1, sy1], outline=col, width=width)
+
+    # 3) text labels for ✗ / 漏 (greedy vertical stagger to avoid overlap)
+    used_y = []
+    for sx0, sy0, sx1, sy1, info in label_queue:
+        name = str(info.get("name", ""))[:18]
+        bad = [f for f in info["fields"] if f[3] != "✓"]
+        detail = " / ".join(f"{f[0]} {f[1]}→{f[2]}" for f in bad[:2])
+        txt = f"{name}: {detail}"
+        ty = int((sy0 + sy1) / 2)
+        while any(abs(ty - u) < 26 for u in used_y):
+            ty += 28
+        used_y.append(ty)
+        ex = int(sx1) + 6
+        draw.line([int(sx1), int((sy0 + sy1) / 2), ex, ty], fill=(180, 60, 60), width=2)
+        draw.text((ex + 4, ty - 10), txt, fill=(150, 30, 30), font=fs)
+
+    # 4) legend + counts
+    ly = H - 60
+    lx = dx1
+    legend = [("✓ 正确", "pass"), ("✗ 读错", "fail"),
+              ("漏 漏读", "missing"), ("多 多读", "extra"), ("— 未比对", "default")]
+    for lbl, key in legend:
+        draw.rectangle([lx, ly, lx + 16, ly + 16], fill=CROSSCHECK_COLORS[key],
+                       outline=(140, 150, 160))
+        draw.text((lx + 22, ly), lbl, fill=(70, 75, 85), font=fs)
+        lx += 150
+    stat = (f"✓ {counts['✓']}   ✗ {counts['✗']}   漏 {counts['漏']}   "
+            f"多 {counts['多']}   未比对 {counts['—']}")
+    draw.text((dx1, H - 100), stat, fill=(60, 65, 75), font=fm)
+    return img
+
+
+# ---------------------------------------------------------------------------
+# Plotly interactive floor plan (for results-page viewer)
+# ---------------------------------------------------------------------------
+
+def _rgb(c, alpha=1.0):
+    """Convert (r,g,b) tuple to 'rgba(...)' string."""
+    return f"rgba({c[0]},{c[1]},{c[2]},{alpha})"
+
+
+def _plan_bounds(rooms, plan_elements):
+    """Compute (minx, miny, maxx, maxy) from rooms + plan elements."""
+    pts = []
+    for r in rooms:
+        for x, y in (r.get("hull") or []):
+            pts.append((x, y))
+    for el in (plan_elements or []):
+        x0, y0, x1, y1 = el["bbox"][:4]
+        pts += [(x0, y0), (x1, y1)]
+    if not pts:
+        return (0, 0, 10, 10)
+    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def build_interactive_plan(rooms, plan_elements=None, floor_name="",
+                          issues=None, verdict_map=None):
+    """Build a plotly figure for an interactive floor plan.
+
+    Style mirrors the existing Pillow-rendered plans: light warm room fills,
+    dark walls, blue windows/doors. Clicking an element carries its id in
+    customdata for the results-page detail panel.
+    """
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    # ---- rooms: one trace per room type (shared legend) ----
+    room_issue_map = {}
+    if issues:
+        for iss in issues:
+            loc = iss.get("location") or iss.get("room_name") or ""
+            sev = iss.get("severity", "info")
+            if loc and (not room_issue_map.get(loc) or sev == "high"):
+                room_issue_map[loc] = sev
+
+    # Group rooms by type so each type is one trace (cleaner legend)
+    rooms_by_type = {}
+    for r in rooms:
+        rtype = r.get("type", "Unknown")
+        rooms_by_type.setdefault(rtype, []).append(r)
+
+    for rtype, rlist in rooms_by_type.items():
+        all_xs = []
+        all_ys = []
+        all_text = []
+        all_custom = []
+        base = ROOM_TYPE_FILL.get(rtype, ROOM_TYPE_FILL["Unknown"])
+
+        for r in rlist:
+            hull = r.get("hull") or []
+            if not hull:
+                continue
+            name = r.get("name", "")
+            rid = r.get("room_id") or r.get("id") or name
+            area = r.get("room_area_sqm")
+            sev = room_issue_map.get(name)
+
+            xs = [p[0] for p in hull] + [hull[0][0], None]
+            ys = [p[1] for p in hull] + [hull[0][1], None]
+            all_xs.extend(xs)
+            all_ys.extend(ys)
+
+            h = f"<b>{name}</b><br>类型: {rtype}"
+            if area:
+                h += f"<br>面积: {area:.1f} m²"
+            if sev:
+                h += f"<br><span style='color:#d32f2f'><b>⚠️ {sev} 级问题</b></span>"
+            all_text.extend([h] * len(xs))
+            all_custom.extend([rid] * len(xs))
+
+        if not all_xs:
+            continue
+
+        fig.add_trace(go.Scatter(
+            x=all_xs, y=all_ys,
+            fill="toself",
+            fillcolor=_rgb(base, 0.9),
+            line=dict(color="rgba(140,148,160,0.7)", width=1.2),
+            mode="lines",
+            name=rtype,
+            text=all_text,
+            hoverinfo="text",
+            customdata=all_custom,
+            legendgroup=f"room_{rtype}",
+            showlegend=True,
+            hoveron="fills",
+        ))
+
+    # ---- physical elements: per-kind traces, line-style (not filled rects) ----
+    # Wall: dark grey thick line. Column: dark filled square.
+    # Window: blue thin line. Door: blue dashed / half.
+    # Railing: thin grey dash.
+
+    els_by_kind = {}
+    for el in (plan_elements or []):
+        kind = el.get("kind", "unknown")
+        els_by_kind.setdefault(kind, []).append(el)
+
+    # Visual specs per kind
+    kind_style = {
+        "wall":    dict(color="#2d323d", width=5,  dash="solid",    showlegend=True,  filled=False),
+        "column":  dict(color="#4a5060", width=1,  dash="solid",    showlegend=True,  filled=True),
+        "window":  dict(color="#3b82c4", width=3,  dash="solid",    showlegend=True,  filled=False),
+        "door":    dict(color="#2563eb", width=2.5, dash="dash",    showlegend=True,  filled=False),
+        "railing": dict(color="#9aa3b2", width=1.5, dash="dot",     showlegend=True,  filled=False),
+        "beam":    dict(color="#b8860b", width=2,  dash="solid",    showlegend=False, filled=False),
+        "slab":    dict(color="#d4c4a8", width=1,  dash="solid",    showlegend=False, filled=True, fill_alpha=0.2),
+        "pipe":    dict(color="#2980b9", width=3,  dash="solid",    showlegend=True,  filled=False),
+        "duct":    dict(color="#8e6bb8", width=4,  dash="solid",    showlegend=True,  filled=False),
+    }
+
+    verdict_colors = {
+        "✓": "#2e8b57",
+        "✗": "#d32f2f",
+        "漏": "#ff8c00",
+        "多": "#8e6bbf",
+    }
+
+    draw_order = ["slab", "beam", "column", "railing", "wall", "window", "door", "duct", "pipe"]
+    for kind in draw_order:
+        els = els_by_kind.get(kind, [])
+        if not els:
+            continue
+        style = kind_style.get(kind, kind_style["wall"])
+
+        all_xs = []
+        all_ys = []
+        all_text = []
+        all_custom = []
+
+        for el in els:
+            x0, y0, x1, y1 = el["bbox"][:4]
+            eid = el.get("id") or el.get("global_id") or ""
+            ename = el.get("name") or kind
+            verdict = verdict_map.get(eid) if verdict_map else None
+
+            # Use outline of the bbox for walls / windows / doors etc.
+            # For thin elements (wall/window), we draw the full rectangle
+            # so click target is bigger; but with thin line it still looks right.
+            if style.get("filled"):
+                # filled shape (column / slab)
+                xs = [x0, x1, x1, x0, x0, None]
+                ys = [y0, y0, y1, y1, y0, None]
+            else:
+                # just the 4 sides
+                xs = [x0, x1, None, x1, x1, None, x1, x0, None, x0, x0, None]
+                ys = [y0, y0, None, y0, y1, None, y1, y1, None, y1, y0, None]
+
+            all_xs.extend(xs)
+            all_ys.extend(ys)
+
+            color = verdict_colors[verdict] if verdict and verdict in verdict_colors else style["color"]
+            h = f"<b>{ename}</b><br>类型: {kind}"
+            if verdict:
+                h += f"<br>互检: <span style='color:{color}'><b>{verdict}</b></span>"
+            if eid:
+                h += f"<br><span style='color:#888;font-size:11px;'>ID: {eid[:24]}…</span>"
+            all_text.extend([h] * len(xs))
+            all_custom.extend([eid or f"{kind}_i"] * len(xs))
+
+        fill_color = None
+        if style.get("filled"):
+            fill_color = style["color"]
+
+        fig.add_trace(go.Scatter(
+            x=all_xs, y=all_ys,
+            fill="toself" if style.get("filled") else "none",
+            fillcolor=_rgb(_hex_to_rgb(style["color"]), style.get("fill_alpha", 0.4)) if style.get("filled") else None,
+            line=dict(
+                color=style["color"],
+                width=style["width"],
+                dash=style.get("dash", "solid"),
+            ),
+            mode="lines",
+            name=kind,
+            text=all_text,
+            hoverinfo="text",
+            customdata=all_custom,
+            legendgroup=kind,
+            showlegend=style.get("showlegend", True),
+            visible="legendonly" if kind in ("pipe", "duct", "slab", "beam") else True,
+        ))
+
+    # ---- layout ----
+    minx, miny, maxx, maxy = _plan_bounds(rooms, plan_elements)
+    span = max(maxx - minx, maxy - miny, 1e-6)
+    pad = span * 0.06
+
+    title = f"{_floor_label(floor_name)}" if floor_name else ""
+
+    fig.update_layout(
+        title=dict(
+            text=f"<span style='font-size:15px;font-weight:700;color:#2a3140;'>{title}</span>"
+                 f"<span style='font-size:12px;color:#8892a0;margin-left:10px;'>💡 点击构件查看详情</span>",
+            x=0, xanchor="left",
+        ),
+        plot_bgcolor="#f5f7fa",
+        paper_bgcolor="white",
+        xaxis=dict(
+            scaleanchor="y", scaleratio=1,
+            range=[minx - pad, maxx + pad],
+            showgrid=False, zeroline=False, showticklabels=False,
+            showline=False,
+        ),
+        yaxis=dict(
+            range=[miny - pad, maxy + pad],
+            showgrid=False, zeroline=False, showticklabels=False,
+            showline=False,
+        ),
+        margin=dict(l=4, r=4, t=32, b=4),
+        height=500,
+        legend=dict(
+            orientation="v",
+            yanchor="top", y=1,
+            xanchor="right", x=1.0,
+            font=dict(size=11, color="#4a5568"),
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="#e2e8f0",
+            borderwidth=1,
+        ),
+        hovermode="closest",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=12,
+            font_family="Inter, system-ui, sans-serif",
+            bordercolor="#e2e8f0",
+        ),
+        clickmode="event+select",
+    )
+
+    return fig
+
+
+def _hex_to_rgb(hex_color):
+    """Convert '#rrggbb' to (r,g,b) tuple."""
+    h = hex_color.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+

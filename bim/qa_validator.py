@@ -79,6 +79,19 @@ def _check_geometry(m, checks):
     key = [e for cls in ("IfcDoor", "IfcWindow", "IfcWall", "IfcWallStandardCase")
            for e in m.by_type(cls)]
     if not key:
+        # An MEP-only model (pipes/ducts/electric, no architectural envelope) is
+        # still reviewable for MEP and whole-building aggregate rules — the
+        # predictive/CSV layer is built on exactly such models. Only treat the
+        # absence of any reviewable content as fatal.
+        n_mep = _count_mep(m)
+        if n_mep:
+            checks.append(("geometry", "warn",
+                           f"模型不含门/窗/墙构件，仅执行 MEP 与整楼聚合类审查"
+                           f"（检测到 {n_mep} 个机电构件）。",
+                           f"No door/window/wall elements present — only MEP and "
+                           f"whole-building aggregate checks run "
+                           f"({n_mep} MEP elements detected)."))
+            return
         checks.append(("geometry", "error", "模型不含门/窗/墙构件，无法审查。",
                        "The model contains no door/window/wall elements — review not possible."))
         return
@@ -148,6 +161,25 @@ _HANDLED_BASE_TYPES = [
     "IfcElectricAppliance", "IfcLightFixture", "IfcElectricDistributionBoard",
     "IfcFlowTerminal", "IfcFlowController",
 ]
+
+
+# MEP element base types (subset of _HANDLED_BASE_TYPES) — used to decide whether
+# a model without an architectural envelope is still reviewable.
+_MEP_BASE_TYPES = [
+    "IfcFlowSegment", "IfcFlowFitting", "IfcFlowTerminal", "IfcFlowController",
+    "IfcElectricAppliance", "IfcLightFixture", "IfcElectricDistributionBoard",
+]
+
+
+def _count_mep(m):
+    """Count MEP elements the extractor consumes (pipes/ducts/electric)."""
+    n = 0
+    for t in _MEP_BASE_TYPES:
+        try:
+            n += len(m.by_type(t))
+        except Exception:
+            pass
+    return n
 
 
 def _is_handled(e):

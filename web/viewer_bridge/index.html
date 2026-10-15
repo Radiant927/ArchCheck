@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 0; overflow: hidden; background: transparent; }
+  </style>
+</head>
+<body>
+<script>
+  // 手动实现 Streamlit 组件通信协议（无需 streamlit-component-lib）
+  function sendBackMsg(type, data) {
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, data || {}),
+      "*"
+    );
+  }
+
+  // 1) 握手 + 高度 0（隐藏，仅做消息中转）
+  sendBackMsg("streamlit:componentReady", { apiVersion: 1 });
+  sendBackMsg("streamlit:setFrameHeight", { height: 0 });
+
+  // 广播给所有兄弟 iframe（3D viewer 在其中一个）
+  function broadcastToSiblings(msg) {
+    try {
+      const n = window.parent.frames.length;
+      for (let i = 0; i < n; i++) {
+        try {
+          const w = window.parent.frames[i];
+          if (w !== window) w.postMessage(msg, "*");
+        } catch (e) { /* 跨域 frame 跳过 */ }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // --- 方向一：Python → viewer（推送定位/高亮指令）---
+  let lastCmd = "";
+  function applyRender(args) {
+    const cmd = (args && args.command) ? args.command : "";
+    if (cmd && cmd !== lastCmd) {
+      lastCmd = cmd;
+      let obj = null;
+      try { obj = JSON.parse(cmd); } catch (e) { return; }
+      if (obj) broadcastToSiblings(obj);
+    }
+  }
+
+  // --- 方向二：viewer → Python（点击构件回传）---
+  let lastGid = null;
+  let lastTs = 0;
+  function setValue(val) {
+    sendBackMsg("streamlit:setComponentValue", { value: val, dataType: "json" });
+  }
+
+  window.addEventListener("message", (e) => {
+    const data = e.data;
+    if (!data || typeof data !== "object") return;
+
+    // Streamlit 的 render 事件（携带组件参数）
+    if (data.type === "streamlit:render") {
+      applyRender(data.args);
+      return;
+    }
+
+    if (data.type === "elementClicked" && data.globalId) {
+      const ts = Date.now();
+      if (data.globalId !== lastGid || ts - lastTs > 500) {
+        lastGid = data.globalId;
+        lastTs = ts;
+        setValue({
+          type: "elementClicked",
+          globalId: data.globalId,
+          name: data.name || "",
+          ifcType: data.ifcType || "",
+          ts: ts,
+        });
+      }
+    }
+    if (data.type === "elementUnclicked") {
+      if (lastGid !== null) {
+        lastGid = null;
+        setValue({ type: "elementUnclicked", ts: Date.now() });
+      }
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,3914 @@
+[
+ {
+  "model": "FZK_Haus",
+  "path": "bim/samples/FZK_Haus.ifc",
+  "qa_score": 100,
+  "qa_fatal": false,
+  "total_issues": 29,
+  "rule_count": 16,
+  "rules": [
+   {
+    "rule_id": "ACC-003",
+    "title": "无障碍走廊净宽检查",
+    "severity": "Missing",
+    "type": "accessibility",
+    "count": 6,
+    "top_locations": [
+     [
+      "5",
+      1
+     ],
+     [
+      "4",
+      1
+     ],
+     [
+      "6",
+      1
+     ],
+     [
+      "2",
+      1
+     ],
+     [
+      "3",
+      1
+     ],
+     [
+      "7",
+      1
+     ]
+    ],
+    "unique_location_count": 6,
+    "floors": [
+     [
+      "一层",
+      5
+     ],
+     [
+      "阁楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-004",
+    "title": "疏散门净宽检查",
+    "severity": "Low",
+    "type": "civil",
+    "count": 3,
+    "top_locations": [
+     [
+      "4",
+      1
+     ],
+     [
+      "2",
+      1
+     ],
+     [
+      "3",
+      1
+     ]
+    ],
+    "unique_location_count": 3,
+    "floors": [
+     [
+      "一层",
+      3
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-002",
+    "title": "梁截面最小高度检查",
+    "severity": "Medium",
+    "type": "structural",
+    "count": 3,
+    "top_locations": [
+     [
+      "Pfette-2-1",
+      1
+     ],
+     [
+      "Pfette-1-1",
+      1
+     ],
+     [
+      "First",
+      1
+     ]
+    ],
+    "unique_location_count": 3,
+    "floors": [
+     [
+      "阁楼",
+      3
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-004",
+    "title": "梁截面最小宽度检查",
+    "severity": "Low",
+    "type": "structural",
+    "count": 3,
+    "top_locations": [
+     [
+      "Pfette-2-1",
+      1
+     ],
+     [
+      "Pfette-1-1",
+      1
+     ],
+     [
+      "First",
+      1
+     ]
+    ],
+    "unique_location_count": 3,
+    "floors": [
+     [
+      "阁楼",
+      3
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-004",
+    "title": "疏散门净宽检查",
+    "severity": "Missing",
+    "type": "civil",
+    "count": 2,
+    "top_locations": [
+     [
+      "6",
+      1
+     ],
+     [
+      "7",
+      1
+     ]
+    ],
+    "unique_location_count": 2,
+    "floors": [
+     [
+      "一层",
+      1
+     ],
+     [
+      "阁楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-007",
+    "title": "房间疏散出口数量下限检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 2,
+    "top_locations": [
+     [
+      "6",
+      1
+     ],
+     [
+      "7",
+      1
+     ]
+    ],
+    "unique_location_count": 2,
+    "floors": [
+     [
+      "一层",
+      1
+     ],
+     [
+      "阁楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-006",
+    "title": "疏散走道/楼梯间应急照明检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 1,
+    "top_locations": [
+     [
+      "1",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "一层",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-003",
+    "title": "安全出口数量检查",
+    "severity": "Medium",
+    "type": "civil",
+    "count": 1,
+    "top_locations": [
+     [
+      "7",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "阁楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-005",
+    "title": "大房间疏散出口数量检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 1,
+    "top_locations": [
+     [
+      "7",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "阁楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-001",
+    "title": "首层疏散外门总净宽检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-002",
+    "title": "消防水池有效容积检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-003",
+    "title": "变压器装机容量检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-004",
+    "title": "应急照明备用电源持续时间检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-007",
+    "title": "灭火器配置检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-008",
+    "title": "自动喷水灭火系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-009",
+    "title": "火灾自动报警系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "model": "office_3f",
+  "path": "bim/samples/office_3f.ifc",
+  "qa_score": 100,
+  "qa_fatal": false,
+  "total_issues": 57,
+  "rule_count": 14,
+  "rules": [
+   {
+    "rule_id": "ACC-003",
+    "title": "无障碍走廊净宽检查",
+    "severity": "Missing",
+    "type": "accessibility",
+    "count": 21,
+    "top_locations": [
+     [
+      "Office 101",
+      1
+     ],
+     [
+      "Office 102",
+      1
+     ],
+     [
+      "Office 103",
+      1
+     ],
+     [
+      "Office 104",
+      1
+     ],
+     [
+      "Meeting Room 105",
+      1
+     ],
+     [
+      "Stairwell 1A",
+      1
+     ],
+     [
+      "Stairwell 1B",
+      1
+     ],
+     [
+      "Office 201",
+      1
+     ],
+     [
+      "Office 202",
+      1
+     ],
+     [
+      "Office 203",
+      1
+     ],
+     [
+      "Office 204",
+      1
+     ],
+     [
+      "Meeting Room 205",
+      1
+     ]
+    ],
+    "unique_location_count": 21,
+    "floors": [
+     [
+      "Floor 1",
+      7
+     ],
+     [
+      "Floor 2",
+      7
+     ],
+     [
+      "Floor 3",
+      7
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-013",
+    "title": "通用水管无坡度/水平提示",
+    "severity": "Low",
+    "type": "mep",
+    "count": 9,
+    "top_locations": [
+     [
+      "FireMain 1",
+      1
+     ],
+     [
+      "FireBranch 1",
+      1
+     ],
+     [
+      "ClashPipe 1",
+      1
+     ],
+     [
+      "FireMain 2",
+      1
+     ],
+     [
+      "FireBranch 2",
+      1
+     ],
+     [
+      "ClashPipe 2",
+      1
+     ],
+     [
+      "FireMain 3",
+      1
+     ],
+     [
+      "FireBranch 3",
+      1
+     ],
+     [
+      "ClashPipe 3",
+      1
+     ]
+    ],
+    "unique_location_count": 9,
+    "floors": [
+     [
+      "Floor 1",
+      3
+     ],
+     [
+      "Floor 2",
+      3
+     ],
+     [
+      "Floor 3",
+      3
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-012",
+    "title": "房间最远点疏散距离检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 6,
+    "top_locations": [
+     [
+      "Meeting Room 105",
+      1
+     ],
+     [
+      "Stairwell 1B",
+      1
+     ],
+     [
+      "Meeting Room 205",
+      1
+     ],
+     [
+      "Stairwell 2B",
+      1
+     ],
+     [
+      "Meeting Room 305",
+      1
+     ],
+     [
+      "Stairwell 3B",
+      1
+     ]
+    ],
+    "unique_location_count": 6,
+    "floors": [
+     [
+      "Floor 1",
+      2
+     ],
+     [
+      "Floor 2",
+      2
+     ],
+     [
+      "Floor 3",
+      2
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-006",
+    "title": "疏散走道/楼梯间应急照明检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 3,
+    "top_locations": [
+     [
+      "Corridor",
+      3
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "Floor 1",
+      1
+     ],
+     [
+      "Floor 2",
+      1
+     ],
+     [
+      "Floor 3",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "EEE-001",
+    "title": "应急照明检查",
+    "severity": "High",
+    "type": "eee",
+    "count": 3,
+    "top_locations": [
+     [
+      "Light Corridor",
+      3
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "Floor 1",
+      1
+     ],
+     [
+      "Floor 2",
+      1
+     ],
+     [
+      "Floor 3",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-003",
+    "title": "管道与电气设备净距检查",
+    "severity": "Medium",
+    "type": "mep",
+    "count": 3,
+    "top_locations": [
+     [
+      "FireMain 1",
+      1
+     ],
+     [
+      "FireMain 2",
+      1
+     ],
+     [
+      "FireMain 3",
+      1
+     ]
+    ],
+    "unique_location_count": 3,
+    "floors": [
+     [
+      "Floor 1",
+      1
+     ],
+     [
+      "Floor 2",
+      1
+     ],
+     [
+      "Floor 3",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-002",
+    "title": "排水管最小坡度检查",
+    "severity": "Medium",
+    "type": "mep",
+    "count": 3,
+    "top_locations": [
+     [
+      "Drain A 1",
+      1
+     ],
+     [
+      "Drain A 2",
+      1
+     ],
+     [
+      "Drain A 3",
+      1
+     ]
+    ],
+    "unique_location_count": 3,
+    "floors": [
+     [
+      "Floor 1",
+      1
+     ],
+     [
+      "Floor 2",
+      1
+     ],
+     [
+      "Floor 3",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-004",
+    "title": "风管占用后疏散走道净高检查",
+    "severity": "High",
+    "type": "mep",
+    "count": 3,
+    "top_locations": [
+     [
+      "DuctBranch 1",
+      1
+     ],
+     [
+      "DuctBranch 2",
+      1
+     ],
+     [
+      "DuctBranch 3",
+      1
+     ]
+    ],
+    "unique_location_count": 3,
+    "floors": [
+     [
+      "Floor 1",
+      1
+     ],
+     [
+      "Floor 2",
+      1
+     ],
+     [
+      "Floor 3",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-001",
+    "title": "首层疏散外门总净宽检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-002",
+    "title": "消防水池有效容积检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-003",
+    "title": "变压器装机容量检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-004",
+    "title": "应急照明备用电源持续时间检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-007",
+    "title": "灭火器配置检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-009",
+    "title": "火灾自动报警系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "model": "Duplex_MEP",
+  "path": "bim/samples/Duplex_MEP_20110907.ifc",
+  "qa_score": 50,
+  "qa_fatal": true,
+  "total_issues": 625,
+  "rule_count": 17,
+  "rules": [
+   {
+    "rule_id": "MEP-013",
+    "title": "通用水管无坡度/水平提示",
+    "severity": "Low",
+    "type": "mep",
+    "count": 279,
+    "top_locations": [
+     [
+      "Pipe Types:Mechanical Pipe:547487",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:547802",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:550028",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:550077",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:554945",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:555449",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:555856",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557596",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557604",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557648",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557656",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557695",
+      1
+     ]
+    ],
+    "unique_location_count": 279,
+    "floors": [
+     [
+      "Level 2",
+      187
+     ],
+     [
+      "Level 1",
+      92
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-012",
+    "title": "通用水管明显反坡检查",
+    "severity": "Missing",
+    "type": "mep",
+    "count": 99,
+    "top_locations": [
+     [
+      "Pipe Types:Mechanical Pipe:547595",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:547742",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:547856",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:547956",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:548047",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557530",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557597",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557601",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557605",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557609",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557611",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:578143",
+      1
+     ]
+    ],
+    "unique_location_count": 99,
+    "floors": [
+     [
+      "Level 2",
+      53
+     ],
+     [
+      "Level 1",
+      46
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-002",
+    "title": "排水管最小坡度检查",
+    "severity": "Medium",
+    "type": "mep",
+    "count": 61,
+    "top_locations": [
+     [
+      "Pipe Types:Waste:582941",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582946",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582947",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582952",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582953",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582956",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582958",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582963",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582967",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582999",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583001",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583004",
+      1
+     ]
+    ],
+    "unique_location_count": 61,
+    "floors": [
+     [
+      "Level 1",
+      38
+     ],
+     [
+      "Level 2",
+      23
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-006",
+    "title": "给水支管最小管径检查",
+    "severity": "Low",
+    "type": "mep",
+    "count": 59,
+    "top_locations": [
+     [
+      "Pipe Types:Cold Water:583055",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583056",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583061",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583062",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583107",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583108",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583112",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583113",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583118",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583119",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583120",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583242",
+      1
+     ]
+    ],
+    "unique_location_count": 59,
+    "floors": [
+     [
+      "Level 1",
+      31
+     ],
+     [
+      "Level 2",
+      28
+     ]
+    ]
+   },
+   {
+    "rule_id": "ACC-003",
+    "title": "无障碍走廊净宽检查",
+    "severity": "Missing",
+    "type": "accessibility",
+    "count": 34,
+    "top_locations": [
+     [
+      "A102-M",
+      1
+     ],
+     [
+      "B102-M",
+      1
+     ],
+     [
+      "A102",
+      1
+     ],
+     [
+      "B102",
+      1
+     ],
+     [
+      "A103-M",
+      1
+     ],
+     [
+      "B103-M",
+      1
+     ],
+     [
+      "A103",
+      1
+     ],
+     [
+      "B103",
+      1
+     ],
+     [
+      "A105-M",
+      1
+     ],
+     [
+      "B105-M",
+      1
+     ],
+     [
+      "A105",
+      1
+     ],
+     [
+      "B105",
+      1
+     ]
+    ],
+    "unique_location_count": 34,
+    "floors": [
+     [
+      "Level 1",
+      16
+     ],
+     [
+      "Level 2",
+      16
+     ],
+     [
+      "Roof",
+      2
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-010",
+    "title": "排水立管最小管径检查",
+    "severity": "Medium",
+    "type": "mep",
+    "count": 24,
+    "top_locations": [
+     [
+      "Pipe Types:Waste:582940",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582945",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582951",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582962",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582975",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583003",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583008",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583014",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583035",
+      1
+     ],
+     [
+      "Pipe Types:PVC:605397",
+      1
+     ],
+     [
+      "Pipe Types:PVC:605615",
+      1
+     ],
+     [
+      "Pipe Types:Waste:612522",
+      1
+     ]
+    ],
+    "unique_location_count": 24,
+    "floors": [
+     [
+      "Level 1",
+      12
+     ],
+     [
+      "Level 2",
+      12
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-008",
+    "title": "管道系统类型明确检查",
+    "severity": "Medium",
+    "type": "mep",
+    "count": 18,
+    "top_locations": [
+     [
+      "M_Conduit Elbow - Steel:Conduit Elbow - Steel:Conduit Elbow - Steel:575520",
+      1
+     ],
+     [
+      "M_Conduit Elbow - Steel:Conduit Elbow - Steel:Conduit Elbow - Steel:575522",
+      1
+     ],
+     [
+      "Conduit with Fittings:Electrical Metallic Tubing (EMT):601543",
+      1
+     ],
+     [
+      "M_Conduit Elbow - Steel:Conduit Elbow - Steel:Conduit Elbow - Steel:601701",
+      1
+     ],
+     [
+      "Conduit with Fittings:Electrical Metallic Tubing (EMT):601746",
+      1
+     ],
+     [
+      "M_Conduit Elbow - Steel:Conduit Elbow - Steel:Conduit Elbow - Steel:601849",
+      1
+     ],
+     [
+      "Conduit with Fittings:Electrical Metallic Tubing (EMT):601926",
+      1
+     ],
+     [
+      "Conduit with Fittings:Electrical Metallic Tubing (EMT):601940",
+      1
+     ],
+     [
+      "M_Conduit Elbow - Steel:Conduit Elbow - Steel:Conduit Elbow - Steel:601941",
+      1
+     ],
+     [
+      "M_Conduit Elbow - Steel:Conduit Elbow - Steel:Conduit Elbow - Steel:601942",
+      1
+     ],
+     [
+      "Conduit with Fittings:Electrical Metallic Tubing (EMT):602008",
+      1
+     ],
+     [
+      "Conduit with Fittings:Electrical Metallic Tubing (EMT):602019",
+      1
+     ]
+    ],
+    "unique_location_count": 18,
+    "floors": [
+     [
+      "Level 1",
+      14
+     ],
+     [
+      "Level 2",
+      4
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-002",
+    "title": "排水管最小坡度检查",
+    "severity": "Missing",
+    "type": "mep",
+    "count": 17,
+    "top_locations": [
+     [
+      "Pipe Types:Waste:582940",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582945",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582951",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582960",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582962",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583003",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583008",
+      1
+     ],
+     [
+      "Pipe Types:Waste:583014",
+      1
+     ],
+     [
+      "Pipe Types:PVC:605397",
+      1
+     ],
+     [
+      "Pipe Types:PVC:605615",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582989",
+      1
+     ],
+     [
+      "Pipe Types:Waste:582991",
+      1
+     ]
+    ],
+    "unique_location_count": 17,
+    "floors": [
+     [
+      "Level 1",
+      10
+     ],
+     [
+      "Level 2",
+      7
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-011",
+    "title": "通用水管最小管径检查（废数据红线）",
+    "severity": "High",
+    "type": "mep",
+    "count": 16,
+    "top_locations": [
+     [
+      "Pipe Types:Mechanical Pipe:555449",
+      1
+     ],
+     [
+      "Pipe Types:Waste:600701",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:601371",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:548123",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:554197",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:557617",
+      1
+     ],
+     [
+      "Pipe Types:Mechanical Pipe:580418",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583196",
+      1
+     ],
+     [
+      "Pipe Types:Cold Water:583197",
+      1
+     ],
+     [
+      "Pipe Types:Hot Water:583201",
+      1
+     ],
+     [
+      "Pipe Types:Hot Water:583202",
+      1
+     ],
+     [
+      "Pipe Types:Hot Water:583219",
+      1
+     ]
+    ],
+    "unique_location_count": 16,
+    "floors": [
+     [
+      "Level 2",
+      13
+     ],
+     [
+      "Level 1",
+      3
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-006",
+    "title": "疏散走道/楼梯间应急照明检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 11,
+    "top_locations": [
+     [
+      "A101-M",
+      1
+     ],
+     [
+      "B101-M",
+      1
+     ],
+     [
+      "A101",
+      1
+     ],
+     [
+      "B101",
+      1
+     ],
+     [
+      "A105-M",
+      1
+     ],
+     [
+      "B105-M",
+      1
+     ],
+     [
+      "A105",
+      1
+     ],
+     [
+      "A201-M",
+      1
+     ],
+     [
+      "B201-M",
+      1
+     ],
+     [
+      "A201",
+      1
+     ],
+     [
+      "B201",
+      1
+     ]
+    ],
+    "unique_location_count": 11,
+    "floors": [
+     [
+      "Level 1",
+      7
+     ],
+     [
+      "Level 2",
+      4
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-001",
+    "title": "首层疏散外门总净宽检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-002",
+    "title": "消防水池有效容积检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-003",
+    "title": "变压器装机容量检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-004",
+    "title": "应急照明备用电源持续时间检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-007",
+    "title": "灭火器配置检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-008",
+    "title": "自动喷水灭火系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-005",
+    "title": "排水支管最小管径检查",
+    "severity": "Medium",
+    "type": "mep",
+    "count": 1,
+    "top_locations": [
+     [
+      "Pipe Types:Waste:600701",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "Level 1",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "model": "Schependomlaan",
+  "path": "bim/samples/Schependomlaan.ifc",
+  "qa_score": 90,
+  "qa_fatal": false,
+  "total_issues": 495,
+  "rule_count": 21,
+  "rules": [
+   {
+    "rule_id": "STR-003",
+    "title": "楼板最小厚度检查",
+    "severity": "Low",
+    "type": "structural",
+    "count": 132,
+    "top_locations": [
+     [
+      "dekvloer",
+      78
+     ],
+     [
+      "vloerveld",
+      44
+     ],
+     [
+      "dakvloer",
+      8
+     ],
+     [
+      "plafond",
+      2
+     ]
+    ],
+    "unique_location_count": 4,
+    "floors": [
+     [
+      "01 eerste verdieping",
+      42
+     ],
+     [
+      "03 derde verdieping",
+      29
+     ],
+     [
+      "02 tweede verdieping",
+      27
+     ],
+     [
+      "00 begane grond",
+      26
+     ],
+     [
+      "04 dak",
+      8
+     ]
+    ]
+   },
+   {
+    "rule_id": "ACC-003",
+    "title": "无障碍走廊净宽检查",
+    "severity": "Missing",
+    "type": "accessibility",
+    "count": 98,
+    "top_locations": [
+     [
+      "1.02",
+      2
+     ],
+     [
+      "1.03",
+      1
+     ],
+     [
+      "3.03",
+      1
+     ],
+     [
+      "2.03",
+      1
+     ],
+     [
+      "A0.00",
+      1
+     ],
+     [
+      "2.06",
+      1
+     ],
+     [
+      "1.05",
+      1
+     ],
+     [
+      "3.06",
+      1
+     ],
+     [
+      "2.07",
+      1
+     ],
+     [
+      "3.07",
+      1
+     ],
+     [
+      "2.04",
+      1
+     ],
+     [
+      "2.00",
+      1
+     ]
+    ],
+    "unique_location_count": 97,
+    "floors": [
+     [
+      "00 begane grond",
+      30
+     ],
+     [
+      "01 eerste verdieping",
+      29
+     ],
+     [
+      "02 tweede verdieping",
+      20
+     ],
+     [
+      "03 derde verdieping",
+      19
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-004",
+    "title": "梁截面最小宽度检查",
+    "severity": "Low",
+    "type": "structural",
+    "count": 73,
+    "top_locations": [
+     [
+      "staallatei ??",
+      33
+     ],
+     [
+      "fund_opstort",
+      12
+     ],
+     [
+      "HEA180",
+      12
+     ],
+     [
+      "hoeklijn bordes",
+      6
+     ],
+     [
+      "staal halfspant",
+      4
+     ],
+     [
+      "geveldrager",
+      3
+     ],
+     [
+      "L150/100/10 (?)",
+      2
+     ],
+     [
+      "staallatei",
+      1
+     ]
+    ],
+    "unique_location_count": 8,
+    "floors": [
+     [
+      "00 begane grond",
+      22
+     ],
+     [
+      "02 tweede verdieping",
+      20
+     ],
+     [
+      "01 eerste verdieping",
+      19
+     ],
+     [
+      "-1 fundering",
+      12
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-002",
+    "title": "梁截面最小高度检查",
+    "severity": "Medium",
+    "type": "structural",
+    "count": 57,
+    "top_locations": [
+     [
+      "staallatei ??",
+      29
+     ],
+     [
+      "HEA180",
+      12
+     ],
+     [
+      "hoeklijn bordes",
+      6
+     ],
+     [
+      "HEA220",
+      4
+     ],
+     [
+      "geveldrager",
+      3
+     ],
+     [
+      "L150/100/10 (?)",
+      2
+     ],
+     [
+      "staallatei",
+      1
+     ]
+    ],
+    "unique_location_count": 7,
+    "floors": [
+     [
+      "01 eerste verdieping",
+      19
+     ],
+     [
+      "00 begane grond",
+      18
+     ],
+     [
+      "02 tweede verdieping",
+      16
+     ],
+     [
+      "04 dak",
+      4
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-002",
+    "title": "排水管最小坡度检查",
+    "severity": "Missing",
+    "type": "mep",
+    "count": 40,
+    "top_locations": [
+     [
+      "hwa afvoer",
+      40
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "02 tweede verdieping",
+      14
+     ],
+     [
+      "00 begane grond",
+      13
+     ],
+     [
+      "01 eerste verdieping",
+      13
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-012",
+    "title": "通用水管明显反坡检查",
+    "severity": "Missing",
+    "type": "mep",
+    "count": 40,
+    "top_locations": [
+     [
+      "hwa afvoer",
+      40
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "02 tweede verdieping",
+      14
+     ],
+     [
+      "00 begane grond",
+      13
+     ],
+     [
+      "01 eerste verdieping",
+      13
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-001",
+    "title": "柱最小截面尺寸检查",
+    "severity": "Medium",
+    "type": "structural",
+    "count": 23,
+    "top_locations": [
+     [
+      "K80/80/4",
+      8
+     ],
+     [
+      "balusters",
+      8
+     ],
+     [
+      "HEB220",
+      5
+     ],
+     [
+      "K152,4/12,5",
+      1
+     ],
+     [
+      "HEA180",
+      1
+     ]
+    ],
+    "unique_location_count": 5,
+    "floors": [
+     [
+      "02 tweede verdieping",
+      8
+     ],
+     [
+      "00 begane grond",
+      5
+     ],
+     [
+      "01 eerste verdieping",
+      5
+     ],
+     [
+      "03 derde verdieping",
+      5
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-004",
+    "title": "疏散门净宽检查",
+    "severity": "Low",
+    "type": "civil",
+    "count": 9,
+    "top_locations": [
+     [
+      "2.01",
+      1
+     ],
+     [
+      "3.01",
+      1
+     ],
+     [
+      "1.01",
+      1
+     ],
+     [
+      "4.01",
+      1
+     ],
+     [
+      "6.01",
+      1
+     ],
+     [
+      "5.09",
+      1
+     ],
+     [
+      "7.01",
+      1
+     ],
+     [
+      "8.09",
+      1
+     ],
+     [
+      "9.01",
+      1
+     ]
+    ],
+    "unique_location_count": 9,
+    "floors": [
+     [
+      "00 begane grond",
+      3
+     ],
+     [
+      "01 eerste verdieping",
+      3
+     ],
+     [
+      "02 tweede verdieping",
+      2
+     ],
+     [
+      "03 derde verdieping",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-002",
+    "title": "排水管最小坡度检查",
+    "severity": "Medium",
+    "type": "mep",
+    "count": 5,
+    "top_locations": [
+     [
+      "hwa afvoer",
+      5
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "01 eerste verdieping",
+      3
+     ],
+     [
+      "00 begane grond",
+      2
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-012",
+    "title": "通用水管明显反坡检查",
+    "severity": "High",
+    "type": "mep",
+    "count": 4,
+    "top_locations": [
+     [
+      "hwa afvoer",
+      4
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "00 begane grond",
+      2
+     ],
+     [
+      "01 eerste verdieping",
+      2
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-006",
+    "title": "疏散走道/楼梯间应急照明检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 2,
+    "top_locations": [
+     [
+      "3.05",
+      1
+     ],
+     [
+      "2.05",
+      1
+     ]
+    ],
+    "unique_location_count": 2,
+    "floors": [
+     [
+      "00 begane grond",
+      2
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-004",
+    "title": "疏散门净宽检查",
+    "severity": "Missing",
+    "type": "civil",
+    "count": 2,
+    "top_locations": [
+     [
+      "3.04",
+      1
+     ],
+     [
+      "6.04",
+      1
+     ]
+    ],
+    "unique_location_count": 2,
+    "floors": [
+     [
+      "00 begane grond",
+      1
+     ],
+     [
+      "01 eerste verdieping",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-007",
+    "title": "房间疏散出口数量下限检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 2,
+    "top_locations": [
+     [
+      "3.04",
+      1
+     ],
+     [
+      "6.04",
+      1
+     ]
+    ],
+    "unique_location_count": 2,
+    "floors": [
+     [
+      "00 begane grond",
+      1
+     ],
+     [
+      "01 eerste verdieping",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-001",
+    "title": "首层疏散外门总净宽检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-002",
+    "title": "消防水池有效容积检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-003",
+    "title": "变压器装机容量检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-004",
+    "title": "应急照明备用电源持续时间检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-007",
+    "title": "灭火器配置检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-008",
+    "title": "自动喷水灭火系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-009",
+    "title": "火灾自动报警系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "MEP-013",
+    "title": "通用水管无坡度/水平提示",
+    "severity": "Low",
+    "type": "mep",
+    "count": 1,
+    "top_locations": [
+     [
+      "hwa afvoer",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "01 eerste verdieping",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "model": "HITOS",
+  "path": "bim/test-suites/real-project/HITOS-Large-Building_IFC2x3.ifc",
+  "qa_score": 100,
+  "qa_fatal": false,
+  "total_issues": 757,
+  "rule_count": 22,
+  "rules": [
+   {
+    "rule_id": "ACC-003",
+    "title": "无障碍走廊净宽检查",
+    "severity": "Missing",
+    "type": "accessibility",
+    "count": 229,
+    "top_locations": [
+     [
+      "99.02.002-3",
+      2
+     ],
+     [
+      "70.001",
+      1
+     ],
+     [
+      "80.005",
+      1
+     ],
+     [
+      "80.004",
+      1
+     ],
+     [
+      "99.02.002",
+      1
+     ],
+     [
+      "80.006",
+      1
+     ],
+     [
+      "80.003",
+      1
+     ],
+     [
+      "99.03.001",
+      1
+     ],
+     [
+      "80.001",
+      1
+     ],
+     [
+      "80.002",
+      1
+     ],
+     [
+      "70.002",
+      1
+     ],
+     [
+      "04.001",
+      1
+     ]
+    ],
+    "unique_location_count": 228,
+    "floors": [
+     [
+      "2.etg",
+      77
+     ],
+     [
+      "u.etg",
+      64
+     ],
+     [
+      "1.etg",
+      53
+     ],
+     [
+      "3.etg",
+      26
+     ],
+     [
+      "kjeller",
+      9
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-003",
+    "title": "楼板最小厚度检查",
+    "severity": "Low",
+    "type": "structural",
+    "count": 223,
+    "top_locations": [
+     [
+      "Kontorhimling",
+      61
+     ],
+     [
+      "Gipshimling",
+      37
+     ],
+     [
+      "Korridorhimling",
+      25
+     ],
+     [
+      "glassgå.himling",
+      21
+     ],
+     [
+      "Grupper.himling",
+      14
+     ],
+     [
+      "Himling_EH01T",
+      14
+     ],
+     [
+      "Trapphimling",
+      9
+     ],
+     [
+      "Himling_EH12T",
+      4
+     ],
+     [
+      "Møteromhimling",
+      3
+     ],
+     [
+      "Himling_EH02T",
+      2
+     ],
+     [
+      "Himling_EH05T",
+      2
+     ],
+     [
+      "Himling_EH03T",
+      2
+     ]
+    ],
+    "unique_location_count": 41,
+    "floors": [
+     [
+      "2.etg",
+      80
+     ],
+     [
+      "1.etg",
+      50
+     ],
+     [
+      "3.etg",
+      47
+     ],
+     [
+      "u.etg",
+      45
+     ],
+     [
+      "kjeller",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-004",
+    "title": "疏散门净宽检查",
+    "severity": "Missing",
+    "type": "civil",
+    "count": 51,
+    "top_locations": [
+     [
+      "99.03.001",
+      1
+     ],
+     [
+      "04.003",
+      1
+     ],
+     [
+      "04.002",
+      1
+     ],
+     [
+      "99.03.001-00",
+      1
+     ],
+     [
+      "04.007",
+      1
+     ],
+     [
+      "04.008",
+      1
+     ],
+     [
+      "04.011",
+      1
+     ],
+     [
+      "04.009",
+      1
+     ],
+     [
+      "04.010",
+      1
+     ],
+     [
+      "01.023",
+      1
+     ],
+     [
+      "99.01.012",
+      1
+     ],
+     [
+      "80.033",
+      1
+     ]
+    ],
+    "unique_location_count": 51,
+    "floors": [
+     [
+      "2.etg",
+      33
+     ],
+     [
+      "u.etg",
+      9
+     ],
+     [
+      "1.etg",
+      7
+     ],
+     [
+      "kjeller",
+      1
+     ],
+     [
+      "3.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-007",
+    "title": "房间疏散出口数量下限检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 51,
+    "top_locations": [
+     [
+      "99.03.001",
+      1
+     ],
+     [
+      "04.003",
+      1
+     ],
+     [
+      "04.002",
+      1
+     ],
+     [
+      "99.03.001-00",
+      1
+     ],
+     [
+      "04.007",
+      1
+     ],
+     [
+      "04.008",
+      1
+     ],
+     [
+      "04.011",
+      1
+     ],
+     [
+      "04.009",
+      1
+     ],
+     [
+      "04.010",
+      1
+     ],
+     [
+      "01.023",
+      1
+     ],
+     [
+      "99.01.012",
+      1
+     ],
+     [
+      "80.033",
+      1
+     ]
+    ],
+    "unique_location_count": 51,
+    "floors": [
+     [
+      "2.etg",
+      33
+     ],
+     [
+      "u.etg",
+      9
+     ],
+     [
+      "1.etg",
+      7
+     ],
+     [
+      "kjeller",
+      1
+     ],
+     [
+      "3.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-001",
+    "title": "柱最小截面尺寸检查",
+    "severity": "Medium",
+    "type": "structural",
+    "count": 51,
+    "top_locations": [
+     [
+      "BS04",
+      25
+     ],
+     [
+      "BS02",
+      8
+     ],
+     [
+      "BS-skive",
+      6
+     ],
+     [
+      "29fm4bIHn7hOVDBaZYhluT",
+      1
+     ],
+     [
+      "0YfX0fG$PBqwVJt_6YVgw6",
+      1
+     ],
+     [
+      "3EFCn3zmD1GOAZwKT_5HIp",
+      1
+     ],
+     [
+      "1rkuIQ$pD38hq$uh1ptW$q",
+      1
+     ],
+     [
+      "1eq72CG151r8pB0cQD$tCg",
+      1
+     ],
+     [
+      "1z8qsQabj3S8TbJL3wQQRG",
+      1
+     ],
+     [
+      "0FETFXh6r5PuyfBnuR2i_0",
+      1
+     ],
+     [
+      "3Fnx2RWuT6qBYQBZg0KgpB",
+      1
+     ],
+     [
+      "1PeQpNXIb2M9Pm1KKfny$v",
+      1
+     ]
+    ],
+    "unique_location_count": 15,
+    "floors": [
+     [
+      "2.etg",
+      23
+     ],
+     [
+      "u.etg",
+      14
+     ],
+     [
+      "1.etg",
+      12
+     ],
+     [
+      "kjeller",
+      1
+     ],
+     [
+      "3.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-004",
+    "title": "梁截面最小宽度检查",
+    "severity": "Low",
+    "type": "structural",
+    "count": 38,
+    "top_locations": [
+     [
+      "NO_VF HUP 100x100x6.3",
+      28
+     ],
+     [
+      "NO_VF HUP 150x100x6.3",
+      8
+     ],
+     [
+      "NO_VF HUP 100x200x10",
+      2
+     ]
+    ],
+    "unique_location_count": 3,
+    "floors": [
+     [
+      "2.etg",
+      38
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-004",
+    "title": "疏散门净宽检查",
+    "severity": "Low",
+    "type": "civil",
+    "count": 37,
+    "top_locations": [
+     [
+      "01.024",
+      1
+     ],
+     [
+      "04.018",
+      1
+     ],
+     [
+      "04.017",
+      1
+     ],
+     [
+      "01.025",
+      1
+     ],
+     [
+      "01.044",
+      1
+     ],
+     [
+      "01.045",
+      1
+     ],
+     [
+      "04.019",
+      1
+     ],
+     [
+      "04.020",
+      1
+     ],
+     [
+      "01.014",
+      1
+     ],
+     [
+      "01.015",
+      1
+     ],
+     [
+      "01.018",
+      1
+     ],
+     [
+      "01.020",
+      1
+     ]
+    ],
+    "unique_location_count": 37,
+    "floors": [
+     [
+      "u.etg",
+      17
+     ],
+     [
+      "2.etg",
+      15
+     ],
+     [
+      "1.etg",
+      3
+     ],
+     [
+      "3.etg",
+      2
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-002",
+    "title": "梁截面最小高度检查",
+    "severity": "Medium",
+    "type": "structural",
+    "count": 36,
+    "top_locations": [
+     [
+      "NO_VF HUP 100x100x6.3",
+      28
+     ],
+     [
+      "NO_VF HUP 150x100x6.3",
+      8
+     ]
+    ],
+    "unique_location_count": 2,
+    "floors": [
+     [
+      "2.etg",
+      36
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-006",
+    "title": "疏散走道/楼梯间应急照明检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 14,
+    "top_locations": [
+     [
+      "99.01.001",
+      1
+     ],
+     [
+      "99.01.002",
+      1
+     ],
+     [
+      "99.01.014",
+      1
+     ],
+     [
+      "99.01.004",
+      1
+     ],
+     [
+      "99.01.005",
+      1
+     ],
+     [
+      "99.01.012",
+      1
+     ],
+     [
+      "99.01.013",
+      1
+     ],
+     [
+      "99.01.006",
+      1
+     ],
+     [
+      "99.01.007",
+      1
+     ],
+     [
+      "99.01.010",
+      1
+     ],
+     [
+      "99.01.011",
+      1
+     ],
+     [
+      "99.01.017",
+      1
+     ]
+    ],
+    "unique_location_count": 14,
+    "floors": [
+     [
+      "2.etg",
+      6
+     ],
+     [
+      "1.etg",
+      4
+     ],
+     [
+      "u.etg",
+      3
+     ],
+     [
+      "3.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-001",
+    "title": "疏散距离检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 8,
+    "top_locations": [
+     [
+      "06.04.001",
+      1
+     ],
+     [
+      "99.02.004-1",
+      1
+     ],
+     [
+      "05.049",
+      1
+     ],
+     [
+      "03.008",
+      1
+     ],
+     [
+      "05.060",
+      1
+     ],
+     [
+      "03.010",
+      1
+     ],
+     [
+      "99.02.002-2",
+      1
+     ],
+     [
+      "80.019",
+      1
+     ]
+    ],
+    "unique_location_count": 8,
+    "floors": [
+     [
+      "2.etg",
+      5
+     ],
+     [
+      "1.etg",
+      2
+     ],
+     [
+      "u.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-003",
+    "title": "安全出口数量检查",
+    "severity": "Medium",
+    "type": "civil",
+    "count": 5,
+    "top_locations": [
+     [
+      "02.028",
+      1
+     ],
+     [
+      "06.03.001",
+      1
+     ],
+     [
+      "06.02.001",
+      1
+     ],
+     [
+      "02.001",
+      1
+     ],
+     [
+      "03.009",
+      1
+     ]
+    ],
+    "unique_location_count": 5,
+    "floors": [
+     [
+      "1.etg",
+      2
+     ],
+     [
+      "2.etg",
+      2
+     ],
+     [
+      "u.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-005",
+    "title": "大房间疏散出口数量检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 4,
+    "top_locations": [
+     [
+      "02.028",
+      1
+     ],
+     [
+      "06.03.001",
+      1
+     ],
+     [
+      "06.02.001",
+      1
+     ],
+     [
+      "02.001",
+      1
+     ]
+    ],
+    "unique_location_count": 4,
+    "floors": [
+     [
+      "1.etg",
+      2
+     ],
+     [
+      "u.etg",
+      1
+     ],
+     [
+      "2.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-012",
+    "title": "房间最远点疏散距离检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 1,
+    "top_locations": [
+     [
+      "70.002",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "u.etg",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-001",
+    "title": "首层疏散外门总净宽检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-002",
+    "title": "消防水池有效容积检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-003",
+    "title": "变压器装机容量检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-004",
+    "title": "应急照明备用电源持续时间检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-005",
+    "title": "无障碍坡道坡度检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-007",
+    "title": "灭火器配置检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-008",
+    "title": "自动喷水灭火系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-009",
+    "title": "火灾自动报警系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "ACC-004",
+    "title": "无障碍电梯检查",
+    "severity": "Medium",
+    "type": "accessibility",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "model": "Smiley-West",
+  "path": "bim/test-suites/real-project/Smiley-West-Office_Archicad20_IFC2x3.ifc",
+  "qa_score": 100,
+  "qa_fatal": false,
+  "total_issues": 267,
+  "rule_count": 13,
+  "rules": [
+   {
+    "rule_id": "ACC-003",
+    "title": "无障碍走廊净宽检查",
+    "severity": "Missing",
+    "type": "accessibility",
+    "count": 100,
+    "top_locations": [
+     [
+      "3.2.1",
+      2
+     ],
+     [
+      "5.2.2",
+      2
+     ],
+     [
+      "4.2.2",
+      2
+     ],
+     [
+      "5.2.1",
+      2
+     ],
+     [
+      "4.2.1",
+      2
+     ],
+     [
+      "3.2.2",
+      2
+     ],
+     [
+      "2.2.1",
+      2
+     ],
+     [
+      "1.2.2",
+      2
+     ],
+     [
+      "2.2.2",
+      2
+     ],
+     [
+      "1.2.1",
+      2
+     ],
+     [
+      "3.2.3",
+      2
+     ],
+     [
+      "2.2.3",
+      2
+     ]
+    ],
+    "unique_location_count": 70,
+    "floors": [
+     [
+      "1.OG",
+      30
+     ],
+     [
+      "2.OG",
+      30
+     ],
+     [
+      "KG",
+      20
+     ],
+     [
+      "EG",
+      20
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-004",
+    "title": "疏散门净宽检查",
+    "severity": "Low",
+    "type": "civil",
+    "count": 80,
+    "top_locations": [
+     [
+      "3.2.3",
+      2
+     ],
+     [
+      "3.2.4",
+      2
+     ],
+     [
+      "2.2.3",
+      2
+     ],
+     [
+      "1.2.4",
+      2
+     ],
+     [
+      "1.2.3",
+      2
+     ],
+     [
+      "2.2.4",
+      2
+     ],
+     [
+      "4.2.3",
+      2
+     ],
+     [
+      "5.2.3",
+      2
+     ],
+     [
+      "4.2.4",
+      2
+     ],
+     [
+      "5.2.4",
+      2
+     ],
+     [
+      "4.3.4",
+      2
+     ],
+     [
+      "3.3.4",
+      2
+     ]
+    ],
+    "unique_location_count": 60,
+    "floors": [
+     [
+      "KG",
+      30
+     ],
+     [
+      "1.OG",
+      20
+     ],
+     [
+      "2.OG",
+      20
+     ],
+     [
+      "EG",
+      10
+     ]
+    ]
+   },
+   {
+    "rule_id": "CIVIL-006",
+    "title": "疏散走道/楼梯间应急照明检查",
+    "severity": "High",
+    "type": "civil",
+    "count": 40,
+    "top_locations": [
+     [
+      "10.1.3",
+      2
+     ],
+     [
+      "3.2.4",
+      2
+     ],
+     [
+      "1.2.4",
+      2
+     ],
+     [
+      "2.2.4",
+      2
+     ],
+     [
+      "4.2.4",
+      2
+     ],
+     [
+      "5.2.4",
+      2
+     ],
+     [
+      "4.3.4",
+      2
+     ],
+     [
+      "3.3.4",
+      2
+     ],
+     [
+      "2.3.4",
+      2
+     ],
+     [
+      "1.3.4",
+      2
+     ],
+     [
+      "5.3.4",
+      2
+     ],
+     [
+      "02.0.3",
+      1
+     ]
+    ],
+    "unique_location_count": 29,
+    "floors": [
+     [
+      "KG",
+      10
+     ],
+     [
+      "EG",
+      10
+     ],
+     [
+      "1.OG",
+      10
+     ],
+     [
+      "2.OG",
+      10
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-001",
+    "title": "柱最小截面尺寸检查",
+    "severity": "Medium",
+    "type": "structural",
+    "count": 20,
+    "top_locations": [
+     [
+      "EG-Stuetze-01-2",
+      1
+     ],
+     [
+      "EG-Stuetze-09-2",
+      1
+     ],
+     [
+      "EG-Stuetze-10-1",
+      1
+     ],
+     [
+      "EG-Stuetze-07-1",
+      1
+     ],
+     [
+      "EG-Stuetze-03-2",
+      1
+     ],
+     [
+      "EG-Stuetze-01-1",
+      1
+     ],
+     [
+      "EG-Stuetze-03-1",
+      1
+     ],
+     [
+      "EG-Stuetze-04-2",
+      1
+     ],
+     [
+      "EG-Stuetze-02-1",
+      1
+     ],
+     [
+      "EG-Stuetze-04-1",
+      1
+     ],
+     [
+      "EG-Stuetze-02-2",
+      1
+     ],
+     [
+      "EG-Stuetze-05-1",
+      1
+     ]
+    ],
+    "unique_location_count": 20,
+    "floors": [
+     [
+      "EG",
+      20
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-002",
+    "title": "梁截面最小高度检查",
+    "severity": "Medium",
+    "type": "structural",
+    "count": 10,
+    "top_locations": [
+     [
+      "EG-Unterzug-10",
+      1
+     ],
+     [
+      "EG-Unterzug-06",
+      1
+     ],
+     [
+      "EG-Unterzug-01",
+      1
+     ],
+     [
+      "EG-Unterzug-02",
+      1
+     ],
+     [
+      "EG-Unterzug-03",
+      1
+     ],
+     [
+      "EG-Unterzug-04",
+      1
+     ],
+     [
+      "EG-Unterzug-05",
+      1
+     ],
+     [
+      "EG-Unterzug-07",
+      1
+     ],
+     [
+      "EG-Unterzug-08",
+      1
+     ],
+     [
+      "EG-Unterzug-09",
+      1
+     ]
+    ],
+    "unique_location_count": 10,
+    "floors": [
+     [
+      "EG",
+      10
+     ]
+    ]
+   },
+   {
+    "rule_id": "STR-004",
+    "title": "梁截面最小宽度检查",
+    "severity": "Low",
+    "type": "structural",
+    "count": 10,
+    "top_locations": [
+     [
+      "EG-Unterzug-10",
+      1
+     ],
+     [
+      "EG-Unterzug-06",
+      1
+     ],
+     [
+      "EG-Unterzug-01",
+      1
+     ],
+     [
+      "EG-Unterzug-02",
+      1
+     ],
+     [
+      "EG-Unterzug-03",
+      1
+     ],
+     [
+      "EG-Unterzug-04",
+      1
+     ],
+     [
+      "EG-Unterzug-05",
+      1
+     ],
+     [
+      "EG-Unterzug-07",
+      1
+     ],
+     [
+      "EG-Unterzug-08",
+      1
+     ],
+     [
+      "EG-Unterzug-09",
+      1
+     ]
+    ],
+    "unique_location_count": 10,
+    "floors": [
+     [
+      "EG",
+      10
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-001",
+    "title": "首层疏散外门总净宽检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-002",
+    "title": "消防水池有效容积检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-003",
+    "title": "变压器装机容量检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-004",
+    "title": "应急照明备用电源持续时间检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-007",
+    "title": "灭火器配置检查",
+    "severity": "Medium",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-008",
+    "title": "自动喷水灭火系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   },
+   {
+    "rule_id": "BLD-009",
+    "title": "火灾自动报警系统检查",
+    "severity": "High",
+    "type": "building",
+    "count": 1,
+    "top_locations": [
+     [
+      "?",
+      1
+     ]
+    ],
+    "unique_location_count": 1,
+    "floors": [
+     [
+      "全楼",
+      1
+     ]
+    ]
+   }
+  ]
+ }
+]

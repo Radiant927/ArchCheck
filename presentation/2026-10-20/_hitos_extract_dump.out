@@ -1,0 +1,75 @@
+floors: 7
+
+-- None @ None
+     walls     0
+     slabs     4
+     doors     0
+     windows   0
+     columns   0
+     beams     0
+     rooms     0
+
+-- None @ None
+     walls     58
+     slabs     8
+     doors     7
+     windows   0
+     columns   16
+     beams     0
+     rooms     0
+
+-- None @ None
+     walls     219
+     slabs     90
+     doors     72
+     windows   40
+     columns   55
+     beams     3
+     rooms     0
+
+-- None @ None
+     walls     201
+     slabs     57
+     doors     45
+     windows   67
+     columns   56
+     beams     0
+     rooms     0
+
+-- None @ None
+     walls     260
+     slabs     99
+     doors     47
+     windows   81
+     columns   72
+     beams     83
+     rooms     0
+
+-- None @ None
+     walls     111
+     slabs     105
+     doors     27
+     windows   38
+     columns   9
+     beams     0
+     rooms     0
+
+-- None @ None
+     walls     0
+     slabs     0
+     doors     0
+     windows   0
+     columns   0
+     beams     0
+     rooms     0
+
+== 合计 ==
+  walls     849
+  slabs     363
+  doors     198
+  windows   226
+  columns   208
+  beams     86
+  rooms     0
+
+top structure keys: ['walls', 'doors', 'windows', 'columns', 'beams', 'slabs', 'footings', 'pipe_fittings', 'pipes', 'ducts', 'column_sections', 'beam_sections', 'slab_thicknesses', 'stairs', 'ramps', 'ramp_slopes', 'ramp_widths', 'railings', 'railing_heights', 'sanitary_fixtures', 'air_terminals', 'outlets', 'door_widths_m', 'door_count', 'unit_suspicious_struct', 'structural_volume_m3', 'material_volumes', 'qty_by_type']

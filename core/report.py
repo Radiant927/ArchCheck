@@ -4,12 +4,14 @@ from datetime import datetime
 from core.config import C
 from core import i18n
 
-def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, structural_r, mep_r, conflicts, std_meta):
+def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, structural_r, mep_r, conflicts, std_meta,
+                    predictive_r=None, predictive_ranking=None, predictive_monitor=None):
     t = i18n._I18N[i18n.LANG]
     sev_map = {"High": ("高", "high") if i18n.LANG == "zh" else ("High", "high"),
                "Medium": ("中", "mid") if i18n.LANG == "zh" else ("Medium", "mid"),
                "Low": ("低", "low") if i18n.LANG == "zh" else ("Low", "low"),
-               "Missing": ("数据缺失", "mid") if i18n.LANG == "zh" else ("Data Missing", "mid")}
+               "Missing": ("数据缺失", "mid") if i18n.LANG == "zh" else ("Data Missing", "mid"),
+               "Predictive": ("预测性", "mid") if i18n.LANG == "zh" else ("Predictive", "mid")}
     priority_label = "优先处理" if i18n.LANG == "zh" else "PRIORITY"
     html_lang = "zh" if i18n.LANG == "zh" else "en"
 
@@ -51,6 +53,57 @@ def generate_report(images_by_floor, all_issues, civil_r, eee_r, building_r, str
                 f'</div>'
             )
         return out
+
+    def summary_rows(cards):
+        out = ""
+        for c in cards:
+            sv_label, sc = sev_map.get(c.get("severity", "Medium"), ("?", "mid"))
+            dist = " · ".join(f"{fl}×{n}" for fl, n in c["by_floor"].items())
+            out += (
+                f'<div class="card">'
+                f'<span class="sev sev-{sc}">{sv_label}</span> '
+                f'<b>{c["rule_id"]}</b> · <span style="color:{C["muted"]};">{c["title"]}</span> '
+                f'<span style="float:right;font-family:monospace;">×{c["count"]}</span>'
+                f'<div class="meta">{t["report_distribution"]}: {dist or "—"}</div></div>')
+        return out
+
+    from core.engine import aggregate_issues
+    _real = [i for i in all_issues if i.get("severity") != "Missing"]
+    _n_missing = len(all_issues) - len(_real)
+    _sum_cards = aggregate_issues(_real, group_by="rule")
+    _miss_note = (f'<div class="meta">{t["missing_section"]}: {_n_missing}</div>'
+                  if _n_missing else "")
+    summary_section = (
+        f'<h2>{t["report_summary_h"]}</h2>'
+        f'<div class="meta" style="margin-bottom:10px;">{t["report_summary_sub"]}</div>'
+        f'{summary_rows(_sum_cards)}{_miss_note}')
+
+    def ranking_rows(ranking):
+        out = ""
+        for r in ranking:
+            med = r.get("median_failure_year")
+            out += (
+                f'<div class="meta">#{r["rank"]} · {r["location"]}'
+                f' · {r.get("floor_name") or ""} · p={r["p_fail_cycle"]:.0%}'
+                f' · median {med if med is not None else "—"}</div>')
+        return out
+
+    pred_section = ""
+    if predictive_r or predictive_ranking:
+        regime = (predictive_monitor or {}).get("regime")
+        regime_note = ""
+        if regime == "inspection":
+            regime_note = (f'<div class="meta" style="color:{C["purple"]};">'
+                           f'{t["predictive_regime_inspection"]}</div>')
+        elif regime == "sensor":
+            regime_note = (f'<div class="meta" style="color:{C["purple"]};">'
+                           f'{t["predictive_regime_sensor"]}</div>')
+        pred_section = (
+            f'<h2>{t["predictive_section_title"]}</h2>'
+            f'{regime_note}'
+            f'{rows(predictive_r or [], "bld")}'
+            f'<h3>{t["predictive_ranking_title"]}</h3>'
+            f'{ranking_rows(predictive_ranking or [])}')
 
     def crow(conflicts):
         out = ""
@@ -113,6 +166,7 @@ h3{{font-size:18px;font-weight:600;margin:20px 0 8px;color:{C["muted"]};}}
 <div class="stat b"><div class="val">{len(mep_r)}</div><div class="lbl">{t["s_mep"]}</div></div>
 <div class="stat r"><div class="val">{len(conflicts)}</div><div class="lbl">{t["s_conf"]}</div></div>
 </div>
+{summary_section}
 <h2>{t["report_annotated"]}</h2>
 {floors_html}
 <h2>{t["report_civ_h"]}</h2>
@@ -125,6 +179,7 @@ h3{{font-size:18px;font-weight:600;margin:20px 0 8px;color:{C["muted"]};}}
 {rows(structural_r,'str') if structural_r else no_str}
 <h2>{t["report_mep_h"]}</h2>
 {rows(mep_r,'mep') if mep_r else no_mep}
+{pred_section}
 <h2>{t["report_conf_h"]}</h2>
 {crow(conflicts) if conflicts else no_cnf}
 <div class="footer">{t["report_footer"]}</div>
